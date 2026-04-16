@@ -1,3 +1,3 @@
--- Initial no-op down migration.
-SELECT 1;
+DROP TABLE IF EXISTS peers;
+DROP TABLE IF EXISTS users;
 
