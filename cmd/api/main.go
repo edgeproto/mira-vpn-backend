@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
+	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/auth"
+	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/db"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/handlers"
+	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/repositories"
 )
 
 func main() {
@@ -15,8 +20,30 @@ func main() {
 		addr = "8080"
 	}
 
+	dbConn, err := db.Open(context.Background(), db.DefaultConfig())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dbConn.Close()
+
+	tokenTTLMinutes := getEnvInt("JWT_TTL_MINUTES", 15)
+	tokenManager, err := auth.NewTokenManager(
+		getEnv("JWT_SECRET", "dev-secret-change-me"),
+		getEnv("JWT_ISSUER", "mira-vpn-api"),
+		time.Duration(tokenTTLMinutes)*time.Minute,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	usersRepo := repositories.NewUsersRepository(dbConn)
+	authHandler := handlers.NewAuthHandler(usersRepo, tokenManager)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", handlers.Health)
+	mux.HandleFunc("/auth/register", authHandler.Register)
+	mux.HandleFunc("/auth/login", authHandler.Login)
+	mux.Handle("/auth/me", auth.Middleware(tokenManager)(http.HandlerFunc(authHandler.Me)))
 
 	srv := &http.Server{
 		Addr:              ":" + addr,
@@ -30,3 +57,21 @@ func main() {
 	}
 }
 
+func getEnv(key string, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return value
+}
