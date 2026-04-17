@@ -18,6 +18,7 @@ type Config struct {
 	MockEndpoint     string
 	MockServerPubKey string
 	MockDNS          string
+	MockAllowedIPs   string
 }
 
 func LoadConfigFromEnv() Config {
@@ -28,6 +29,7 @@ func LoadConfigFromEnv() Config {
 		MockEndpoint:     getEnv("WGMGR_MOCK_ENDPOINT", "127.0.0.1:51820"),
 		MockServerPubKey: getEnv("WGMGR_MOCK_SERVER_PUBLIC_KEY", DefaultMockServerPublicKey),
 		MockDNS:          os.Getenv("WGMGR_MOCK_DNS"),
+		MockAllowedIPs:   getEnv("WGMGR_MOCK_ALLOWED_IPS", "0.0.0.0/0, ::/0"),
 	}
 }
 

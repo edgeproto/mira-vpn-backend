@@ -15,7 +15,13 @@ func main() {
 		log.Fatalf("unsupported WGMGR_MODE %q (only \"mock\" is implemented)", cfg.Mode)
 	}
 
-	prov, err := wgmgr.NewMockProvisioner(cfg.MockOutputDir, cfg.MockEndpoint, cfg.MockServerPubKey, cfg.MockDNS)
+	prov, err := wgmgr.NewMockProvisioner(
+		cfg.MockOutputDir,
+		cfg.MockEndpoint,
+		cfg.MockServerPubKey,
+		cfg.MockDNS,
+		cfg.MockAllowedIPs,
+	)
 	if err != nil {
 		log.Fatal(err)
 	}

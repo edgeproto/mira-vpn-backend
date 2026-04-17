@@ -12,6 +12,7 @@ import (
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/db"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/handlers"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/repositories"
+	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/wgmgrclient"
 )
 
 func main() {
@@ -37,13 +38,20 @@ func main() {
 	}
 
 	usersRepo := repositories.NewUsersRepository(dbConn)
+	peersRepo := repositories.NewPeersRepository(dbConn)
 	authHandler := handlers.NewAuthHandler(usersRepo, tokenManager)
+	wgmgrClient := wgmgrclient.New(
+		getEnv("WGMGR_BASE_URL", "http://127.0.0.1:9090"),
+		time.Duration(getEnvInt("WGMGR_TIMEOUT_SECONDS", 5))*time.Second,
+	)
+	wireGuardHandler := handlers.NewWireGuardHandler(peersRepo, wgmgrClient)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", handlers.Health)
 	mux.HandleFunc("/auth/register", authHandler.Register)
 	mux.HandleFunc("/auth/login", authHandler.Login)
 	mux.Handle("/auth/me", auth.Middleware(tokenManager)(http.HandlerFunc(authHandler.Me)))
+	mux.Handle("/wireguard/config", auth.Middleware(tokenManager)(http.HandlerFunc(wireGuardHandler.CreateConfig)))
 
 	srv := &http.Server{
 		Addr:              ":" + addr,

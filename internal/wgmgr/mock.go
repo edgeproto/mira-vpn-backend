@@ -19,6 +19,7 @@ import (
 
 // ErrNotFound is returned when a peer artifact does not exist on disk.
 var ErrNotFound = errors.New("wgmgr: peer not found")
+var ErrUnsupportedLocation = errors.New("wgmgr: unsupported location")
 
 // PeerMeta is persisted next to the mock client config ({peerID}.json).
 type PeerMeta struct {
@@ -27,6 +28,7 @@ type PeerMeta struct {
 	Location   string `json:"location"`
 	PublicKey  string `json:"publicKey"`
 	Address    string `json:"address"`
+	Config     string `json:"config"`
 	ConfigPath string `json:"configPath"`
 }
 
@@ -36,12 +38,13 @@ type MockProvisioner struct {
 	endpoint     string
 	serverPubKey string
 	dns          string
+	allowedIPs   string
 
 	mu sync.Mutex
 }
 
 // NewMockProvisioner creates a mock provisioner. outputDir is created if missing.
-func NewMockProvisioner(outputDir, endpoint, serverPubKey, dns string) (*MockProvisioner, error) {
+func NewMockProvisioner(outputDir, endpoint, serverPubKey, dns, allowedIPs string) (*MockProvisioner, error) {
 	if outputDir == "" {
 		return nil, errors.New("wgmgr: mock output dir is empty")
 	}
@@ -58,6 +61,7 @@ func NewMockProvisioner(outputDir, endpoint, serverPubKey, dns string) (*MockPro
 		endpoint:     endpoint,
 		serverPubKey: serverPubKey,
 		dns:          dns,
+		allowedIPs:   allowedIPs,
 	}, nil
 }
 
@@ -65,6 +69,13 @@ func NewMockProvisioner(outputDir, endpoint, serverPubKey, dns string) (*MockPro
 func (m *MockProvisioner) CreatePeer(userID, location string) (*PeerMeta, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if strings.TrimSpace(location) == "" {
+		location = LocationFinland
+	}
+	profile, ok := ProfileForLocation(location)
+	if !ok {
+		return nil, ErrUnsupportedLocation
+	}
 
 	priv, err := wgtypes.GeneratePrivateKey()
 	if err != nil {
@@ -86,7 +97,15 @@ func (m *MockProvisioner) CreatePeer(userID, location string) (*PeerMeta, error)
 	metaName := peerID + ".json"
 	confPath := filepath.Join(m.outputDir, confName)
 
-	cfg := buildClientConfig(priv.String(), addr, m.dns, m.serverPubKey, m.endpoint)
+	cfg := BuildClientConfig(ClientConfigInput{
+		ClientPrivateKey: priv.String(),
+		ClientAddress:    addr,
+		DNS:              firstNonEmpty(profile.DNS, m.dns),
+		ServerPublicKey:  firstNonEmpty(profile.ServerPublicKey, m.serverPubKey),
+		Endpoint:         firstNonEmpty(profile.Endpoint, m.endpoint),
+		AllowedIPs:       firstNonEmpty(profile.AllowedIPs, m.allowedIPs),
+		Keepalive:        profile.Keepalive,
+	})
 	if err := os.WriteFile(confPath, []byte(cfg), 0o600); err != nil {
 		return nil, err
 	}
@@ -97,6 +116,7 @@ func (m *MockProvisioner) CreatePeer(userID, location string) (*PeerMeta, error)
 		Location:   location,
 		PublicKey:  pub.String(),
 		Address:    addr,
+		Config:     cfg,
 		ConfigPath: confPath,
 	}
 	raw, err := json.MarshalIndent(meta, "", "  ")
@@ -187,34 +207,6 @@ func lastOctet(cidr string) (int, bool) {
 	return int(ip[3]), true
 }
 
-func buildClientConfig(
-	clientPrivKey, clientCIDR, dnsLine, serverPubKey, endpoint string,
-) string {
-	var b strings.Builder
-	b.WriteString("[Interface]\n")
-	b.WriteString("PrivateKey = ")
-	b.WriteString(clientPrivKey)
-	b.WriteString("\n")
-	b.WriteString("Address = ")
-	b.WriteString(clientCIDR)
-	b.WriteString("\n")
-	if dnsLine != "" {
-		b.WriteString("DNS = ")
-		b.WriteString(dnsLine)
-		b.WriteString("\n")
-	}
-	b.WriteString("\n[Peer]\n")
-	b.WriteString("PublicKey = ")
-	b.WriteString(serverPubKey)
-	b.WriteString("\n")
-	b.WriteString("Endpoint = ")
-	b.WriteString(endpoint)
-	b.WriteString("\n")
-	b.WriteString("AllowedIPs = 0.0.0.0/0, ::/0\n")
-	b.WriteString("PersistentKeepalive = 25\n")
-	return b.String()
-}
-
 func randomPeerID() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -235,4 +227,11 @@ func ParsePeerID(s string) (string, error) {
 		return "", strconv.ErrSyntax
 	}
 	return s, nil
+}
+
+func firstNonEmpty(primary, fallback string) string {
+	if strings.TrimSpace(primary) != "" {
+		return primary
+	}
+	return fallback
 }

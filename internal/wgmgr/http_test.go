@@ -17,12 +17,12 @@ func TestMockProvisioner_CreateDeleteRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	p, err := wgmgr.NewMockProvisioner(dir, "10.0.0.1:51820", wgmgr.DefaultMockServerPublicKey, "")
+	p, err := wgmgr.NewMockProvisioner(dir, "10.0.0.1:51820", wgmgr.DefaultMockServerPublicKey, "", "0.0.0.0/0, ::/0")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	meta, err := p.CreatePeer("user-1", "USA")
+	meta, err := p.CreatePeer("user-1", "Finland")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestHandler_POST_v1_peers(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	p, err := wgmgr.NewMockProvisioner(dir, "127.0.0.1:51820", wgmgr.DefaultMockServerPublicKey, "")
+	p, err := wgmgr.NewMockProvisioner(dir, "127.0.0.1:51820", wgmgr.DefaultMockServerPublicKey, "", "0.0.0.0/0, ::/0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestHandler_POST_v1_peers(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/peers", strings.NewReader(`{"userId":"u1","location":"USA"}`))
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/peers", strings.NewReader(`{"userId":"u1","location":"Finland"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,11 +87,12 @@ func TestHandler_POST_v1_peers(t *testing.T) {
 		PeerID    string `json:"peerId"`
 		PublicKey string `json:"publicKey"`
 		Address   string `json:"address"`
+		Config    string `json:"config"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		t.Fatal(err)
 	}
-	if out.PeerID == "" || out.PublicKey == "" || out.Address == "" {
+	if out.PeerID == "" || out.PublicKey == "" || out.Address == "" || out.Config == "" {
 		t.Fatalf("response: %+v", out)
 	}
 

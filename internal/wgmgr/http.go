@@ -43,6 +43,7 @@ type createPeerResponse struct {
 	Location   string `json:"location"`
 	PublicKey  string `json:"publicKey"`
 	Address    string `json:"address"`
+	Config     string `json:"config"`
 	ConfigPath string `json:"configPath"`
 }
 
@@ -57,7 +58,7 @@ func (h *Handler) createPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Location == "" {
-		req.Location = "USA"
+		req.Location = LocationFinland
 	}
 
 	meta, err := h.provision.CreatePeer(req.UserID, req.Location)
@@ -75,6 +76,7 @@ func (h *Handler) createPeer(w http.ResponseWriter, r *http.Request) {
 		Location:   meta.Location,
 		PublicKey:  meta.PublicKey,
 		Address:    meta.Address,
+		Config:     meta.Config,
 		ConfigPath: meta.ConfigPath,
 	})
 }
