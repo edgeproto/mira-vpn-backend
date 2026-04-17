@@ -7,13 +7,19 @@ import (
 	"net/http"
 )
 
-// Handler serves the WireGuard management HTTP API (mock mode).
-type Handler struct {
-	provision *MockProvisioner
+// Provisioner abstracts peer provisioning for management API handlers.
+type Provisioner interface {
+	CreatePeer(userID, location string) (*PeerMeta, error)
+	DeletePeer(peerID string) error
 }
 
-// NewHandler returns an HTTP handler for mock provisioning.
-func NewHandler(p *MockProvisioner) *Handler {
+// Handler serves the WireGuard management HTTP API.
+type Handler struct {
+	provision Provisioner
+}
+
+// NewHandler returns an HTTP handler for peer provisioning.
+func NewHandler(p Provisioner) *Handler {
 	return &Handler{provision: p}
 }
 
