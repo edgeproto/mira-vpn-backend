@@ -68,3 +68,42 @@ func (r *UsersRepository) GetByID(ctx context.Context, id string) (models.User, 
 	}
 	return u, err
 }
+
+func (r *UsersRepository) GetByProviderSubject(ctx context.Context, provider string, subject string) (models.User, error) {
+	var u models.User
+	err := r.db.QueryRowContext(
+		ctx,
+		`SELECT u.id::text, u.email, u.password_hash, u.is_pro, u.created_at
+		 FROM users u
+		 INNER JOIN auth_identities ai ON ai.user_id = u.id
+		 WHERE ai.provider = $1 AND ai.provider_subject = $2
+		 LIMIT 1`,
+		provider,
+		subject,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.IsPro, &u.CreatedAt)
+
+	if err == sql.ErrNoRows {
+		return models.User{}, ErrNotFound
+	}
+	return u, err
+}
+
+func (r *UsersRepository) CreateIdentity(
+	ctx context.Context,
+	userID string,
+	provider string,
+	providerSubject string,
+	email string,
+) error {
+	_, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO auth_identities (user_id, provider, provider_subject, email)
+		 VALUES ($1::uuid, $2, $3, $4)
+		 ON CONFLICT (provider, provider_subject) DO NOTHING`,
+		userID,
+		provider,
+		providerSubject,
+		email,
+	)
+	return err
+}

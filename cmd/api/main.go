@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/auth"
@@ -36,10 +37,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	verifier := auth.NewOIDCVerifier(
+		splitEnvCSV("GOOGLE_CLIENT_IDS"),
+		splitEnvCSV("APPLE_AUDIENCES"),
+		time.Duration(getEnvInt("OIDC_TIMEOUT_SECONDS", 5))*time.Second,
+	)
 
 	usersRepo := repositories.NewUsersRepository(dbConn)
 	peersRepo := repositories.NewPeersRepository(dbConn)
-	authHandler := handlers.NewAuthHandler(usersRepo, tokenManager)
+	authHandler := handlers.NewAuthHandler(usersRepo, tokenManager, verifier)
 	wgmgrClient := wgmgrclient.New(
 		getEnv("WGMGR_BASE_URL", "http://127.0.0.1:9090"),
 		time.Duration(getEnvInt("WGMGR_TIMEOUT_SECONDS", 5))*time.Second,
@@ -50,6 +56,8 @@ func main() {
 	mux.HandleFunc("/health", handlers.Health)
 	mux.HandleFunc("/auth/register", authHandler.Register)
 	mux.HandleFunc("/auth/login", authHandler.Login)
+	mux.HandleFunc("/auth/social/google", authHandler.SocialGoogle)
+	mux.HandleFunc("/auth/social/apple", authHandler.SocialApple)
 	mux.Handle("/auth/me", auth.Middleware(tokenManager)(http.HandlerFunc(authHandler.Me)))
 	mux.Handle("/wireguard/config", auth.Middleware(tokenManager)(http.HandlerFunc(wireGuardHandler.CreateConfig)))
 
@@ -82,4 +90,21 @@ func getEnvInt(key string, fallback int) int {
 		return fallback
 	}
 	return value
+}
+
+func splitEnvCSV(key string) []string {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		values = append(values, trimmed)
+	}
+	return values
 }

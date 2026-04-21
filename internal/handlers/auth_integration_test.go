@@ -20,6 +20,7 @@ import (
 type memoryUsersStore struct {
 	byID    map[string]models.User
 	byEmail map[string]models.User
+	byIdent map[string]string
 	nextID  int
 }
 
@@ -27,6 +28,7 @@ func newMemoryUsersStore() *memoryUsersStore {
 	return &memoryUsersStore{
 		byID:    map[string]models.User{},
 		byEmail: map[string]models.User{},
+		byIdent: map[string]string{},
 		nextID:  1,
 	}
 }
@@ -66,13 +68,36 @@ func (m *memoryUsersStore) GetByID(_ context.Context, id string) (models.User, e
 	return user, nil
 }
 
+func (m *memoryUsersStore) GetByProviderSubject(_ context.Context, provider string, subject string) (models.User, error) {
+	userID, ok := m.byIdent[provider+":"+subject]
+	if !ok {
+		return models.User{}, repositories.ErrNotFound
+	}
+	user, ok := m.byID[userID]
+	if !ok {
+		return models.User{}, repositories.ErrNotFound
+	}
+	return user, nil
+}
+
+func (m *memoryUsersStore) CreateIdentity(
+	_ context.Context,
+	userID string,
+	provider string,
+	providerSubject string,
+	_ string,
+) error {
+	m.byIdent[provider+":"+providerSubject] = userID
+	return nil
+}
+
 func TestAuthRegisterLoginAndProtectedFlow(t *testing.T) {
 	users := newMemoryUsersStore()
 	tokens, err := auth.NewTokenManager("test-secret", "test-issuer", 5*time.Minute)
 	if err != nil {
 		t.Fatalf("expected token manager creation to succeed: %v", err)
 	}
-	authHandler := NewAuthHandler(users, tokens)
+	authHandler := NewAuthHandler(users, tokens, nil)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/register", authHandler.Register)

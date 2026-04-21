@@ -19,17 +19,21 @@ type usersStore interface {
 	Create(ctx context.Context, email string, passwordHash string, isPro bool) (models.User, error)
 	GetByEmail(ctx context.Context, email string) (models.User, error)
 	GetByID(ctx context.Context, id string) (models.User, error)
+	GetByProviderSubject(ctx context.Context, provider string, subject string) (models.User, error)
+	CreateIdentity(ctx context.Context, userID string, provider string, providerSubject string, email string) error
 }
 
 type AuthHandler struct {
-	users  usersStore
-	tokens *auth.TokenManager
+	users    usersStore
+	tokens   *auth.TokenManager
+	verifier auth.SocialVerifier
 }
 
-func NewAuthHandler(users usersStore, tokens *auth.TokenManager) *AuthHandler {
+func NewAuthHandler(users usersStore, tokens *auth.TokenManager, verifier auth.SocialVerifier) *AuthHandler {
 	return &AuthHandler{
-		users:  users,
-		tokens: tokens,
+		users:    users,
+		tokens:   tokens,
+		verifier: verifier,
 	}
 }
 
@@ -42,6 +46,11 @@ type authRequest struct {
 type authResponse struct {
 	Token string      `json:"token"`
 	User  models.User `json:"user"`
+}
+
+type socialAuthRequest struct {
+	IDToken string `json:"idToken"`
+	IsPro   bool   `json:"isPro"`
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +149,104 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, user)
 }
 
+func (h *AuthHandler) SocialGoogle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.verifier == nil {
+		http.Error(w, "social auth is not configured", http.StatusNotImplemented)
+		return
+	}
+
+	req, ok := decodeSocialAuthRequest(w, r)
+	if !ok {
+		return
+	}
+	claims, err := h.verifier.VerifyGoogleIDToken(r.Context(), req.IDToken)
+	if err != nil {
+		http.Error(w, "invalid google token", http.StatusUnauthorized)
+		return
+	}
+
+	h.completeSocialAuth(w, r, claims, req.IsPro)
+}
+
+func (h *AuthHandler) SocialApple(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.verifier == nil {
+		http.Error(w, "social auth is not configured", http.StatusNotImplemented)
+		return
+	}
+
+	req, ok := decodeSocialAuthRequest(w, r)
+	if !ok {
+		return
+	}
+	claims, err := h.verifier.VerifyAppleIDToken(r.Context(), req.IDToken)
+	if err != nil {
+		http.Error(w, "invalid apple token", http.StatusUnauthorized)
+		return
+	}
+
+	h.completeSocialAuth(w, r, claims, req.IsPro)
+}
+
+func (h *AuthHandler) completeSocialAuth(w http.ResponseWriter, r *http.Request, claims auth.SocialClaims, isPro bool) {
+	user, err := h.users.GetByProviderSubject(r.Context(), claims.Provider, claims.Subject)
+	if err != nil && !errors.Is(err, repositories.ErrNotFound) {
+		http.Error(w, "failed to fetch user", http.StatusInternalServerError)
+		return
+	}
+
+	if errors.Is(err, repositories.ErrNotFound) {
+		if claims.Email == "" {
+			http.Error(w, "provider did not return an email", http.StatusBadRequest)
+			return
+		}
+
+		userByEmail, lookupErr := h.users.GetByEmail(r.Context(), claims.Email)
+		switch {
+		case lookupErr == nil:
+			user = userByEmail
+		case errors.Is(lookupErr, repositories.ErrNotFound):
+			user, lookupErr = h.users.Create(r.Context(), claims.Email, "", isPro)
+			if lookupErr != nil {
+				if isUniqueViolation(lookupErr) {
+					http.Error(w, "email already exists", http.StatusConflict)
+					return
+				}
+				http.Error(w, "failed to create user", http.StatusInternalServerError)
+				return
+			}
+		default:
+			http.Error(w, "failed to fetch user", http.StatusInternalServerError)
+			return
+		}
+
+		if err := h.users.CreateIdentity(
+			r.Context(),
+			user.ID,
+			claims.Provider,
+			claims.Subject,
+			claims.Email,
+		); err != nil {
+			http.Error(w, "failed to link social identity", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	token, err := h.tokens.CreateToken(user.ID)
+	if err != nil {
+		http.Error(w, "failed to issue token", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, authResponse{Token: token, User: user})
+}
+
 func decodeAuthRequest(w http.ResponseWriter, r *http.Request) (authRequest, bool) {
 	var req authRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -157,6 +264,20 @@ func decodeAuthRequest(w http.ResponseWriter, r *http.Request) (authRequest, boo
 		return authRequest{}, false
 	}
 
+	return req, true
+}
+
+func decodeSocialAuthRequest(w http.ResponseWriter, r *http.Request) (socialAuthRequest, bool) {
+	var req socialAuthRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return socialAuthRequest{}, false
+	}
+	req.IDToken = strings.TrimSpace(req.IDToken)
+	if req.IDToken == "" {
+		http.Error(w, "idToken is required", http.StatusBadRequest)
+		return socialAuthRequest{}, false
+	}
 	return req, true
 }
 
