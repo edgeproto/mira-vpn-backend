@@ -55,6 +55,28 @@ type stubProvisioner struct {
 	err  error
 }
 
+type memoryGuestStore struct {
+	byDevice map[string]string
+	nextID   int
+}
+
+func newMemoryGuestStore() *memoryGuestStore {
+	return &memoryGuestStore{
+		byDevice: map[string]string{},
+		nextID:   100,
+	}
+}
+
+func (m *memoryGuestStore) ResolveUserID(_ context.Context, deviceID string) (string, error) {
+	if id, ok := m.byDevice[deviceID]; ok {
+		return id, nil
+	}
+	id := "guest-user-" + strconvItoa(m.nextID)
+	m.nextID++
+	m.byDevice[deviceID] = id
+	return id, nil
+}
+
 func (s stubProvisioner) CreatePeer(_ context.Context, _ wgmgrclient.CreatePeerRequest) (wgmgrclient.CreatePeerResponse, error) {
 	if s.err != nil {
 		return wgmgrclient.CreatePeerResponse{}, s.err
@@ -116,5 +138,45 @@ func TestWireGuardCreateConfig_ProtectedFlow(t *testing.T) {
 	}
 	if out.Location != "Finland" || out.PeerID == "" || out.Config == "" {
 		t.Fatalf("unexpected response: %+v", out)
+	}
+}
+
+func TestWireGuardCreateGuestConfig(t *testing.T) {
+	t.Parallel()
+
+	peers := newMemoryPeersStore()
+	guests := newMemoryGuestStore()
+	h := NewWireGuardHandler(peers, stubProvisioner{
+		resp: wgmgrclient.CreatePeerResponse{
+			PeerID:    "guest-peer-1",
+			PublicKey: "wg-public-key",
+			Address:   "10.200.0.3/32",
+			Config:    "[Interface]\nPrivateKey = test\n",
+		},
+	}, guests)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/wireguard/config/guest", h.CreateGuestConfig)
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	reqBody := bytes.NewBufferString(`{"deviceId":"device-abc","location":"Finland"}`)
+	resp, err := http.Post(server.URL+"/wireguard/config/guest", "application/json", reqBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected %d, got %d", http.StatusCreated, resp.StatusCode)
+	}
+
+	var out struct {
+		PeerID string `json:"peerId"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out.PeerID == "" {
+		t.Fatalf("expected peerId in response")
 	}
 }

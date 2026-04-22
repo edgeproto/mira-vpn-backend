@@ -23,9 +23,14 @@ type wgmgrProvisioner interface {
 	CreatePeer(ctx context.Context, req wgmgrclient.CreatePeerRequest) (wgmgrclient.CreatePeerResponse, error)
 }
 
+type guestDevicesStore interface {
+	ResolveUserID(ctx context.Context, deviceID string) (string, error)
+}
+
 type WireGuardHandler struct {
-	peers   peersStore
-	provSvc wgmgrProvisioner
+	peers    peersStore
+	provSvc  wgmgrProvisioner
+	guestMap guestDevicesStore
 }
 
 type wireguardConfigRequest struct {
@@ -40,8 +45,12 @@ type wireguardConfigResponse struct {
 	Config    string `json:"config"`
 }
 
-func NewWireGuardHandler(peers peersStore, provSvc wgmgrProvisioner) *WireGuardHandler {
-	return &WireGuardHandler{peers: peers, provSvc: provSvc}
+func NewWireGuardHandler(peers peersStore, provSvc wgmgrProvisioner, guestMap ...guestDevicesStore) *WireGuardHandler {
+	var guests guestDevicesStore
+	if len(guestMap) > 0 {
+		guests = guestMap[0]
+	}
+	return &WireGuardHandler{peers: peers, provSvc: provSvc, guestMap: guests}
 }
 
 func (h *WireGuardHandler) CreateConfig(w http.ResponseWriter, r *http.Request) {
@@ -56,12 +65,51 @@ func (h *WireGuardHandler) CreateConfig(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var req wireguardConfigRequest
+	req, ok := decodeWireGuardConfigRequest(w, r)
+	if !ok {
+		return
+	}
+
+	h.createConfigForUser(w, r, userID, req.Location)
+}
+
+type guestWireguardConfigRequest struct {
+	DeviceID string `json:"deviceId"`
+	Location string `json:"location"`
+}
+
+func (h *WireGuardHandler) CreateGuestConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.guestMap == nil {
+		http.Error(w, "guest vpn is not configured", http.StatusNotImplemented)
+		return
+	}
+
+	var req guestWireguardConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json body", http.StatusBadRequest)
 		return
 	}
-	location := strings.TrimSpace(req.Location)
+	req.DeviceID = strings.TrimSpace(req.DeviceID)
+	if req.DeviceID == "" {
+		http.Error(w, "deviceId is required", http.StatusBadRequest)
+		return
+	}
+	req.Location = strings.TrimSpace(req.Location)
+
+	userID, err := h.guestMap.ResolveUserID(r.Context(), req.DeviceID)
+	if err != nil {
+		http.Error(w, "failed to resolve guest device", http.StatusInternalServerError)
+		return
+	}
+
+	h.createConfigForUser(w, r, userID, req.Location)
+}
+
+func (h *WireGuardHandler) createConfigForUser(w http.ResponseWriter, r *http.Request, userID string, location string) {
 	if location == "" {
 		location = wgmgr.LocationFinland
 	}
@@ -108,4 +156,14 @@ func (h *WireGuardHandler) CreateConfig(w http.ResponseWriter, r *http.Request) 
 		PublicKey: mgmtResp.PublicKey,
 		Config:    mgmtResp.Config,
 	})
+}
+
+func decodeWireGuardConfigRequest(w http.ResponseWriter, r *http.Request) (wireguardConfigRequest, bool) {
+	var req wireguardConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return wireguardConfigRequest{}, false
+	}
+	req.Location = strings.TrimSpace(req.Location)
+	return req, true
 }
