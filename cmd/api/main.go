@@ -45,12 +45,14 @@ func main() {
 
 	usersRepo := repositories.NewUsersRepository(dbConn)
 	peersRepo := repositories.NewPeersRepository(dbConn)
+	billingRepo := repositories.NewBillingRepository(dbConn)
 	authHandler := handlers.NewAuthHandler(usersRepo, tokenManager, verifier)
 	wgmgrClient := wgmgrclient.New(
 		getEnv("WGMGR_BASE_URL", "http://127.0.0.1:9090"),
 		time.Duration(getEnvInt("WGMGR_TIMEOUT_SECONDS", 5))*time.Second,
 	)
 	wireGuardHandler := handlers.NewWireGuardHandler(peersRepo, wgmgrClient)
+	billingHandler := handlers.NewBillingHandler(billingRepo)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", handlers.Health)
@@ -60,6 +62,7 @@ func main() {
 	mux.HandleFunc("/auth/social/apple", authHandler.SocialApple)
 	mux.Handle("/auth/me", auth.Middleware(tokenManager)(http.HandlerFunc(authHandler.Me)))
 	mux.Handle("/wireguard/config", auth.Middleware(tokenManager)(http.HandlerFunc(wireGuardHandler.CreateConfig)))
+	mux.Handle("/billing/verify", auth.Middleware(tokenManager)(http.HandlerFunc(billingHandler.VerifyPurchase)))
 
 	srv := &http.Server{
 		Addr:              ":" + addr,
