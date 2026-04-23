@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const DefaultAllowedIPs = "0.0.0.0/0, ::/0"
+const DefaultAllowedIPs = "0.0.0.0/0"
 
 const (
 	LocationFinland = "Finland"

@@ -16,7 +16,7 @@ func TestBuildClientConfig_GenericTemplateFields(t *testing.T) {
 		DNS:              "1.1.1.1",
 		ServerPublicKey:  "server-public-key",
 		Endpoint:         "fi.mira-vpn.example:51820",
-		AllowedIPs:       "0.0.0.0/0, ::/0",
+		AllowedIPs:       "0.0.0.0/0,::/0",
 		Keepalive:        25,
 	})
 
@@ -28,7 +28,7 @@ func TestBuildClientConfig_GenericTemplateFields(t *testing.T) {
 		"[Peer]",
 		"PublicKey = server-public-key",
 		"Endpoint = fi.mira-vpn.example:51820",
-		"AllowedIPs = 0.0.0.0/0, ::/0",
+		"AllowedIPs = 0.0.0.0/0,::/0",
 		"PersistentKeepalive = 25",
 	}
 	for _, r := range required {
@@ -48,7 +48,7 @@ func TestBuildClientConfig_DefaultAllowedIPs(t *testing.T) {
 		Endpoint:         "fi.mira-vpn.example:51820",
 	})
 
-	if !strings.Contains(cfg, "AllowedIPs = 0.0.0.0/0, ::/0") {
+	if !strings.Contains(cfg, "AllowedIPs = 0.0.0.0/0,::/0") {
 		t.Fatalf("expected default allowed IPs, got:\n%s", cfg)
 	}
 }

@@ -17,7 +17,7 @@ func TestMockProvisioner_CreateDeleteRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	p, err := wgmgr.NewMockProvisioner(dir, "10.0.0.1:51820", wgmgr.DefaultMockServerPublicKey, "", "0.0.0.0/0, ::/0")
+	p, err := wgmgr.NewMockProvisioner(dir, "10.0.0.1:51820", wgmgr.DefaultMockServerPublicKey, "", "0.0.0.0/0,::/0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestHandler_POST_v1_peers(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	p, err := wgmgr.NewMockProvisioner(dir, "127.0.0.1:51820", wgmgr.DefaultMockServerPublicKey, "", "0.0.0.0/0, ::/0")
+	p, err := wgmgr.NewMockProvisioner(dir, "127.0.0.1:51820", wgmgr.DefaultMockServerPublicKey, "", "0.0.0.0/0,::/0")
 	if err != nil {
 		t.Fatal(err)
 	}

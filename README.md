@@ -27,3 +27,37 @@ docker compose -p mira_vpn_step9 down -v
 - `COMPOSE_PROJECT_NAME` (default: `mira_vpn_step9`)
 - `API_HOST_PORT` (default: `18080`)
 - `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`
+
+## Step 10 real WireGuard mode (dedicated server)
+
+This keeps Step 9 mock mode unchanged and adds an override for real mode.
+
+1) Create a real env file from template:
+
+```bash
+cp .env.real.example .env.real
+```
+
+2) Edit `.env.real` and set at least:
+- `WGMGR_REAL_ENDPOINT` (example: `95.217.206.233:51820`)
+- `WGMGR_REAL_SERVER_PUBLIC_KEY` (from `/etc/wireguard/server_public.key` on your VPN host)
+- `JWT_SECRET` (strong random value)
+
+3) Run the real stack + smoke validation:
+
+```bash
+./scripts/step10_real.sh
+```
+
+It will:
+- start `postgres`, `migrations`, `wgmgr` (real mode), and `api` using:
+  - `docker-compose.yml`
+  - `docker-compose.real.yml`
+- run auth + guest provisioning smoke checks
+- assert returned WireGuard configs contain `Endpoint = $WGMGR_REAL_ENDPOINT`
+
+Stop and clean real stack:
+
+```bash
+docker compose -p mira_vpn_real -f docker-compose.yml -f docker-compose.real.yml --env-file .env.real down -v
+```
