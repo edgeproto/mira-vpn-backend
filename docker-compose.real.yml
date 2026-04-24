@@ -14,6 +14,7 @@ services:
       WGMGR_REAL_ALLOWED_IPS: ${WGMGR_REAL_ALLOWED_IPS:-0.0.0.0/0}
       WGMGR_REAL_DRY_RUN: ${WGMGR_REAL_DRY_RUN:-false}
       WGMGR_REAL_COMMAND_TIMEOUT_SECONDS: ${WGMGR_REAL_COMMAND_TIMEOUT_SECONDS:-8}
+      WGMGR_CLIENT_MTU: ${WGMGR_CLIENT_MTU:-1280}
     network_mode: host
     cap_add:
       - NET_ADMIN
@@ -23,6 +24,7 @@ services:
 
   api:
     environment:
+      PORT: ${API_HOST_PORT:-18080}
       DB_HOST: 127.0.0.1
       DB_PORT: ${POSTGRES_HOST_PORT:-15432}
       WGMGR_BASE_URL: http://127.0.0.1:9090

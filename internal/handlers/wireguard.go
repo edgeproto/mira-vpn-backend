@@ -3,20 +3,17 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/auth"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/models"
-	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/repositories"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/wgmgr"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/wgmgrclient"
 )
 
 type peersStore interface {
-	Create(ctx context.Context, userID string, location string, wgPublicKey string, status string) (models.Peer, error)
-	GetByUserAndLocation(ctx context.Context, userID string, location string) (models.Peer, error)
+	Upsert(ctx context.Context, userID string, location string, wgPublicKey string, status string) (models.Peer, error)
 }
 
 type wgmgrProvisioner interface {
@@ -120,16 +117,6 @@ func (h *WireGuardHandler) createConfigForUser(w http.ResponseWriter, r *http.Re
 	}
 	location = profile.Name
 
-	_, err := h.peers.GetByUserAndLocation(r.Context(), userID, location)
-	if err == nil {
-		http.Error(w, "peer already exists for location", http.StatusConflict)
-		return
-	}
-	if !errors.Is(err, repositories.ErrNotFound) {
-		http.Error(w, "failed to check existing peer", http.StatusInternalServerError)
-		return
-	}
-
 	mgmtResp, err := h.provSvc.CreatePeer(r.Context(), wgmgrclient.CreatePeerRequest{
 		UserID:   userID,
 		Location: location,
@@ -139,17 +126,12 @@ func (h *WireGuardHandler) createConfigForUser(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	_, err = h.peers.Create(r.Context(), userID, location, mgmtResp.PublicKey, "active")
-	if err != nil {
-		if isUniqueViolation(err) {
-			http.Error(w, "peer already exists for location", http.StatusConflict)
-			return
-		}
+	if _, err := h.peers.Upsert(r.Context(), userID, location, mgmtResp.PublicKey, "active"); err != nil {
 		http.Error(w, "failed to persist peer", http.StatusInternalServerError)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, wireguardConfigResponse{
+	writeJSON(w, http.StatusOK, wireguardConfigResponse{
 		Location:  location,
 		PeerID:    mgmtResp.PeerID,
 		Address:   mgmtResp.Address,

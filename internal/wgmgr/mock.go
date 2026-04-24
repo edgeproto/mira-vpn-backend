@@ -39,12 +39,14 @@ type MockProvisioner struct {
 	serverPubKey string
 	dns          string
 	allowedIPs   string
+	clientMTU    int
 
 	mu sync.Mutex
 }
 
 // NewMockProvisioner creates a mock provisioner. outputDir is created if missing.
-func NewMockProvisioner(outputDir, endpoint, serverPubKey, dns, allowedIPs string) (*MockProvisioner, error) {
+// clientMTU is emitted in client configs when > 0 (see WGMGR_CLIENT_MTU).
+func NewMockProvisioner(outputDir, endpoint, serverPubKey, dns, allowedIPs string, clientMTU int) (*MockProvisioner, error) {
 	if outputDir == "" {
 		return nil, errors.New("wgmgr: mock output dir is empty")
 	}
@@ -62,6 +64,7 @@ func NewMockProvisioner(outputDir, endpoint, serverPubKey, dns, allowedIPs strin
 		serverPubKey: serverPubKey,
 		dns:          dns,
 		allowedIPs:   allowedIPs,
+		clientMTU:    clientMTU,
 	}, nil
 }
 
@@ -101,6 +104,7 @@ func (m *MockProvisioner) CreatePeer(userID, location string) (*PeerMeta, error)
 		ClientPrivateKey: priv.String(),
 		ClientAddress:    addr,
 		DNS:              firstNonEmpty(profile.DNS, m.dns),
+		MTU:              m.clientMTU,
 		ServerPublicKey:  firstNonEmpty(profile.ServerPublicKey, m.serverPubKey),
 		Endpoint:         firstNonEmpty(profile.Endpoint, m.endpoint),
 		AllowedIPs:       firstNonEmpty(profile.AllowedIPs, m.allowedIPs),

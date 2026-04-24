@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/auth"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/models"
-	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/repositories"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/wgmgrclient"
 )
 
@@ -24,29 +22,25 @@ func newMemoryPeersStore() *memoryPeersStore {
 	return &memoryPeersStore{byKey: map[string]models.Peer{}}
 }
 
-func (m *memoryPeersStore) Create(_ context.Context, userID string, location string, wgPublicKey string, status string) (models.Peer, error) {
+func (m *memoryPeersStore) Upsert(_ context.Context, userID string, location string, wgPublicKey string, status string) (models.Peer, error) {
 	key := userID + "|" + location
-	if _, ok := m.byKey[key]; ok {
-		return models.Peer{}, errors.New("duplicate")
+	existing, ok := m.byKey[key]
+	id := "peer-db-1"
+	if ok && existing.ID != "" {
+		id = existing.ID
 	}
 	p := models.Peer{
-		ID:          "peer-db-1",
+		ID:          id,
 		UserID:      userID,
 		Location:    location,
 		WgPublicKey: wgPublicKey,
 		Status:      status,
 		CreatedAt:   time.Now(),
 	}
-	m.byKey[key] = p
-	return p, nil
-}
-
-func (m *memoryPeersStore) GetByUserAndLocation(_ context.Context, userID string, location string) (models.Peer, error) {
-	key := userID + "|" + location
-	p, ok := m.byKey[key]
-	if !ok {
-		return models.Peer{}, repositories.ErrNotFound
+	if ok {
+		p.CreatedAt = existing.CreatedAt
 	}
+	m.byKey[key] = p
 	return p, nil
 }
 
@@ -124,8 +118,8 @@ func TestWireGuardCreateConfig_ProtectedFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("expected %d, got %d", http.StatusCreated, resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, resp.StatusCode)
 	}
 
 	var out struct {
@@ -138,6 +132,62 @@ func TestWireGuardCreateConfig_ProtectedFlow(t *testing.T) {
 	}
 	if out.Location != "Finland" || out.PeerID == "" || out.Config == "" {
 		t.Fatalf("unexpected response: %+v", out)
+	}
+}
+
+func TestWireGuardCreateConfig_IdempotentSecondRequest(t *testing.T) {
+	t.Parallel()
+
+	tokens, err := auth.NewTokenManager("test-secret", "test-issuer", 5*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := tokens.CreateToken("user-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	peers := newMemoryPeersStore()
+	h := NewWireGuardHandler(peers, stubProvisioner{
+		resp: wgmgrclient.CreatePeerResponse{
+			PeerID:    "abcd1234",
+			PublicKey: "wg-public-key",
+			Address:   "10.200.0.2/32",
+			Config:    "[Interface]\nPrivateKey = test\n",
+		},
+	})
+
+	mux := http.NewServeMux()
+	mux.Handle("/wireguard/config", auth.Middleware(tokens)(http.HandlerFunc(h.CreateConfig)))
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	do := func() *http.Response {
+		t.Helper()
+		reqBody := bytes.NewBufferString(`{"location":"Finland"}`)
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/wireguard/config", reqBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	r1 := do()
+	defer r1.Body.Close()
+	if r1.StatusCode != http.StatusOK {
+		t.Fatalf("first: expected %d, got %d", http.StatusOK, r1.StatusCode)
+	}
+
+	r2 := do()
+	defer r2.Body.Close()
+	if r2.StatusCode != http.StatusOK {
+		t.Fatalf("second: expected %d, got %d", http.StatusOK, r2.StatusCode)
 	}
 }
 
@@ -166,8 +216,8 @@ func TestWireGuardCreateGuestConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("expected %d, got %d", http.StatusCreated, resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, resp.StatusCode)
 	}
 
 	var out struct {

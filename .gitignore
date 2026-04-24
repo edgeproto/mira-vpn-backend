@@ -26,6 +26,10 @@ go.work.sum
 
 # env file
 .env
+.env.real
+
+# Real-mode peer artifacts (bind-mounted from compose)
+var/
 
 # Editor/IDE
 # .idea/

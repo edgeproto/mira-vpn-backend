@@ -38,6 +38,21 @@ func TestBuildClientConfig_GenericTemplateFields(t *testing.T) {
 	}
 }
 
+func TestBuildClientConfig_MTU(t *testing.T) {
+	t.Parallel()
+
+	cfg := wgmgr.BuildClientConfig(wgmgr.ClientConfigInput{
+		ClientPrivateKey: "private-key",
+		ClientAddress:    "10.200.0.2/32",
+		MTU:              1280,
+		ServerPublicKey:  "server-public-key",
+		Endpoint:         "fi.example:51820",
+	})
+	if !strings.Contains(cfg, "MTU = 1280") {
+		t.Fatalf("expected MTU line, got:\n%s", cfg)
+	}
+}
+
 func TestBuildClientConfig_DefaultAllowedIPs(t *testing.T) {
 	t.Parallel()
 
@@ -48,7 +63,7 @@ func TestBuildClientConfig_DefaultAllowedIPs(t *testing.T) {
 		Endpoint:         "fi.mira-vpn.example:51820",
 	})
 
-	if !strings.Contains(cfg, "AllowedIPs = 0.0.0.0/0,::/0") {
+	if !strings.Contains(cfg, "AllowedIPs = 0.0.0.0/0") {
 		t.Fatalf("expected default allowed IPs, got:\n%s", cfg)
 	}
 }

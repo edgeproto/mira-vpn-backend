@@ -16,6 +16,38 @@ func NewPeersRepository(db *sql.DB) *PeersRepository {
 	return &PeersRepository{db: db}
 }
 
+// Upsert inserts or updates the peer row for (user_id, location).
+// WireGuard config fetch must be idempotent so clients can refresh after
+// server reboots or profile changes without getting HTTP 409.
+func (r *PeersRepository) Upsert(
+	ctx context.Context,
+	userID string,
+	location string,
+	wgPublicKey string,
+	status string,
+) (models.Peer, error) {
+	if status == "" {
+		status = "pending"
+	}
+
+	var p models.Peer
+	err := r.db.QueryRowContext(
+		ctx,
+		`INSERT INTO peers (user_id, location, wg_public_key, status)
+		 VALUES ($1::uuid, $2, $3, $4)
+		 ON CONFLICT (user_id, location) DO UPDATE
+		 SET wg_public_key = EXCLUDED.wg_public_key,
+		     status = EXCLUDED.status
+		 RETURNING id::text, user_id::text, location, wg_public_key, status, created_at`,
+		userID,
+		location,
+		wgPublicKey,
+		status,
+	).Scan(&p.ID, &p.UserID, &p.Location, &p.WgPublicKey, &p.Status, &p.CreatedAt)
+
+	return p, err
+}
+
 func (r *PeersRepository) Create(
 	ctx context.Context,
 	userID string,

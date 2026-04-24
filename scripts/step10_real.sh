@@ -25,6 +25,27 @@ if [[ -z "${WGMGR_REAL_SERVER_PUBLIC_KEY:-}" ]]; then
   exit 1
 fi
 
+WG_INTERFACE="${WGMGR_REAL_INTERFACE:-wg0}"
+if ! command -v wg >/dev/null 2>&1; then
+  echo "wg binary not found on host; install wireguard-tools before running real mode." >&2
+  exit 1
+fi
+
+echo "==> validating server public key against host interface (${WG_INTERFACE})"
+HOST_SERVER_PUBLIC_KEY="$(wg show "${WG_INTERFACE}" public-key 2>/dev/null || true)"
+if [[ -z "${HOST_SERVER_PUBLIC_KEY}" ]]; then
+  echo "failed to read public key for interface ${WG_INTERFACE}. Ensure interface exists and is up." >&2
+  exit 1
+fi
+if [[ "${HOST_SERVER_PUBLIC_KEY}" != "${WGMGR_REAL_SERVER_PUBLIC_KEY}" ]]; then
+  echo "server public key mismatch for ${WG_INTERFACE}" >&2
+  echo "host key: ${HOST_SERVER_PUBLIC_KEY}" >&2
+  echo "env  key: ${WGMGR_REAL_SERVER_PUBLIC_KEY}" >&2
+  echo "update WGMGR_REAL_SERVER_PUBLIC_KEY in ${ENV_FILE} to match host key, then retry." >&2
+  exit 1
+fi
+echo "server public key matches host interface"
+
 export API_HOST_PORT
 export POSTGRES_USER="${POSTGRES_USER:-postgres}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}"

@@ -45,6 +45,7 @@ services:
       WGMGR_MOCK_SERVER_PUBLIC_KEY: ${WGMGR_MOCK_SERVER_PUBLIC_KEY:-BB/7/1u13mBwC2kWQyEnKcuU1z9MChg3QiJjezAmujo=}
       WGMGR_MOCK_DNS: ${WGMGR_MOCK_DNS:-1.1.1.1}
       WGMGR_MOCK_ALLOWED_IPS: ${WGMGR_MOCK_ALLOWED_IPS:-0.0.0.0/0}
+      WGMGR_CLIENT_MTU: ${WGMGR_CLIENT_MTU:-1280}
     volumes:
       - wgmgr_data:/data/wgmgr-mock
 

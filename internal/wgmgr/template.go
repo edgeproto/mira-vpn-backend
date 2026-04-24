@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// IPv4-only default: many VPN hosts only NAT IPv4; routing ::/0 without v6 NAT
+// can stall clients on AAAA-heavy sites. Use WGMGR_*_ALLOWED_IPS when v6 is ready.
 const DefaultAllowedIPs = "0.0.0.0/0"
 
 const (
@@ -34,10 +36,12 @@ type ClientConfigInput struct {
 	ClientPrivateKey string
 	ClientAddress    string
 	DNS              string
-	ServerPublicKey  string
-	Endpoint         string
-	AllowedIPs       string
-	Keepalive        int
+	// MTU is written under [Interface] when > 0 (helps path-MTU / TLS stalls on some networks).
+	MTU             int
+	ServerPublicKey string
+	Endpoint        string
+	AllowedIPs      string
+	Keepalive       int
 }
 
 // ProfileForLocation returns a normalized profile for a location.
@@ -77,6 +81,11 @@ func BuildClientConfig(in ClientConfigInput) string {
 	b.WriteString("Address = ")
 	b.WriteString(in.ClientAddress)
 	b.WriteString("\n")
+	if in.MTU > 0 {
+		b.WriteString("MTU = ")
+		b.WriteString(strconv.Itoa(in.MTU))
+		b.WriteString("\n")
+	}
 	if in.DNS != "" {
 		b.WriteString("DNS = ")
 		b.WriteString(in.DNS)

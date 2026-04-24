@@ -18,9 +18,11 @@ import (
 //   - WGMGR_REAL_INTERFACE: target WireGuard interface for wg set (default wg0)
 //   - WGMGR_REAL_DRY_RUN: if true, log command without executing it
 //   - WGMGR_REAL_COMMAND_TIMEOUT_SECONDS: timeout for wg command execution (default 5)
+//   - WGMGR_CLIENT_MTU: optional MTU line in client [Interface] (default 1280; set 0 to omit)
 type Config struct {
 	Port             string
 	Mode             string
+	ClientMTU        int
 	MockOutputDir    string
 	MockEndpoint     string
 	MockServerPubKey string
@@ -40,6 +42,7 @@ func LoadConfigFromEnv() Config {
 	return Config{
 		Port:             getEnv("PORT", "9090"),
 		Mode:             getEnv("WGMGR_MODE", "mock"),
+		ClientMTU:        getEnvInt("WGMGR_CLIENT_MTU", 1280),
 		MockOutputDir:    getEnv("WGMGR_MOCK_OUTPUT_DIR", "var/wgmgr-mock"),
 		MockEndpoint:     getEnv("WGMGR_MOCK_ENDPOINT", "127.0.0.1:51820"),
 		MockServerPubKey: getEnv("WGMGR_MOCK_SERVER_PUBLIC_KEY", DefaultMockServerPublicKey),

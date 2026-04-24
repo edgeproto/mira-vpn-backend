@@ -23,6 +23,7 @@ func main() {
 			cfg.MockServerPubKey,
 			cfg.MockDNS,
 			cfg.MockAllowedIPs,
+			cfg.ClientMTU,
 		)
 	case "real":
 		prov, err = wgmgr.NewRealProvisioner(cfg)

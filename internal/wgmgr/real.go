@@ -33,10 +33,10 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) error {
 type RealProvisioner struct {
 	*MockProvisioner
 
-	wgInterface     string
-	dryRun          bool
-	commandTimeout  time.Duration
-	runner          commandRunner
+	wgInterface    string
+	dryRun         bool
+	commandTimeout time.Duration
+	runner         commandRunner
 }
 
 func NewRealProvisioner(cfg Config) (*RealProvisioner, error) {
@@ -52,6 +52,7 @@ func NewRealProvisioner(cfg Config) (*RealProvisioner, error) {
 		cfg.RealServerPubKey,
 		cfg.RealDNS,
 		cfg.RealAllowedIPs,
+		cfg.ClientMTU,
 	)
 	if err != nil {
 		return nil, err
@@ -75,6 +76,11 @@ func (r *RealProvisioner) CreatePeer(userID, location string) (*PeerMeta, error)
 	}
 	existing, err := r.findExisting(userID, location)
 	if err == nil {
+		// Peer artifacts survive restarts, but `wg set` peers are ephemeral until
+		// persisted via wg-quick or similar. Re-apply so wg0 always matches disk.
+		if err := r.applyPeer(existing); err != nil {
+			return nil, err
+		}
 		return existing, nil
 	}
 	if !errors.Is(err, ErrNotFound) {
