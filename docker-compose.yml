@@ -1,4 +1,8 @@
 services:
+  # Reusing postgres_data keeps the superuser password from first init.
+  # If POSTGRES_PASSWORD no longer matches, migrations/API get "password
+  # authentication failed" and auth returns 500 — align env or ALTER USER, or
+  # remove the volume (wipes DB).
   postgres:
     image: postgres:16-alpine
     environment:
