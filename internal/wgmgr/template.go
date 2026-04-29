@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -70,6 +71,25 @@ func ProfileForLocation(location string) (LocationProfile, bool) {
 		return LocationProfile{}, false
 	}
 	return normalized, true
+}
+
+// ListLocationProfiles returns normalized profiles sorted by canonical name.
+func ListLocationProfiles() []LocationProfile {
+	profilesMu.RLock()
+	defer profilesMu.RUnlock()
+
+	out := make([]LocationProfile, 0, len(profiles))
+	for _, p := range profiles {
+		normalized, err := normalizeProfile(p.Name, p)
+		if err != nil {
+			continue
+		}
+		out = append(out, normalized)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Name < out[j].Name
+	})
+	return out
 }
 
 // LoadLocationProfilesFromEnv loads profiles from WGMGR_LOCATION_PROFILES_JSON.

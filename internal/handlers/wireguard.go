@@ -42,12 +42,32 @@ type wireguardConfigResponse struct {
 	Config    string `json:"config"`
 }
 
+type wireguardLocationResponse struct {
+	Name string `json:"name"`
+}
+
 func NewWireGuardHandler(peers peersStore, provSvc wgmgrProvisioner, guestMap ...guestDevicesStore) *WireGuardHandler {
 	var guests guestDevicesStore
 	if len(guestMap) > 0 {
 		guests = guestMap[0]
 	}
 	return &WireGuardHandler{peers: peers, provSvc: provSvc, guestMap: guests}
+}
+
+func (h *WireGuardHandler) ListLocations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	profiles := wgmgr.ListLocationProfiles()
+	resp := make([]wireguardLocationResponse, 0, len(profiles))
+	for _, p := range profiles {
+		resp = append(resp, wireguardLocationResponse{Name: p.Name})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"locations": resp,
+	})
 }
 
 func (h *WireGuardHandler) CreateConfig(w http.ResponseWriter, r *http.Request) {

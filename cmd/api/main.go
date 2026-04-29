@@ -67,6 +67,7 @@ func main() {
 	mux.HandleFunc("/auth/social/google", authHandler.SocialGoogle)
 	mux.HandleFunc("/auth/social/apple", authHandler.SocialApple)
 	mux.Handle("/auth/me", auth.Middleware(tokenManager)(http.HandlerFunc(authHandler.Me)))
+	mux.HandleFunc("/wireguard/locations", wireGuardHandler.ListLocations)
 	mux.Handle("/wireguard/config", auth.Middleware(tokenManager)(http.HandlerFunc(wireGuardHandler.CreateConfig)))
 	mux.HandleFunc("/wireguard/config/guest", wireGuardHandler.CreateGuestConfig)
 	mux.Handle("/billing/verify", auth.Middleware(tokenManager)(http.HandlerFunc(billingHandler.VerifyPurchase)))

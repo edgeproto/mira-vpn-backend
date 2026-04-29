@@ -11,6 +11,7 @@ import (
 
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/auth"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/models"
+	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/wgmgr"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/wgmgrclient"
 )
 
@@ -76,6 +77,43 @@ func (s stubProvisioner) CreatePeer(_ context.Context, _ wgmgrclient.CreatePeerR
 		return wgmgrclient.CreatePeerResponse{}, s.err
 	}
 	return s.resp, nil
+}
+
+func TestWireGuardListLocations(t *testing.T) {
+	t.Setenv("WGMGR_LOCATION_PROFILES_JSON", `[
+		{"name":"Germany","endpoint":"de.example.com:443","serverPublicKey":"de-pub"},
+		{"name":"Finland","endpoint":"fi.example.com:443","serverPublicKey":"fi-pub"}
+	]`)
+	if err := wgmgr.LoadLocationProfilesFromEnv(); err != nil {
+		t.Fatalf("load location profiles: %v", err)
+	}
+	t.Cleanup(func() {
+		t.Setenv("WGMGR_LOCATION_PROFILES_JSON", "")
+		_ = wgmgr.LoadLocationProfilesFromEnv()
+	})
+
+	h := NewWireGuardHandler(newMemoryPeersStore(), stubProvisioner{})
+	req := httptest.NewRequest(http.MethodGet, "/wireguard/locations", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListLocations(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rec.Code)
+	}
+	var out struct {
+		Locations []struct {
+			Name string `json:"name"`
+		} `json:"locations"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Locations) != 2 {
+		t.Fatalf("expected 2 locations, got %d", len(out.Locations))
+	}
+	if out.Locations[0].Name != "Finland" || out.Locations[1].Name != "Germany" {
+		t.Fatalf("unexpected order/content: %+v", out.Locations)
+	}
 }
 
 func TestWireGuardCreateConfig_ProtectedFlow(t *testing.T) {
