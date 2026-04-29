@@ -10,6 +10,9 @@ import (
 
 func main() {
 	cfg := wgmgr.LoadConfigFromEnv()
+	if err := wgmgr.LoadLocationProfilesFromEnv(); err != nil {
+		log.Fatal(err)
+	}
 
 	var (
 		prov wgmgr.Provisioner

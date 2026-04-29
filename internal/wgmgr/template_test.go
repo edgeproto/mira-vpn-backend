@@ -85,3 +85,51 @@ func TestProfileForLocation_DefaultFinlandProfile(t *testing.T) {
 		t.Fatalf("expected keepalive 25, got %d", profile.Keepalive)
 	}
 }
+
+func TestParseLocationProfilesJSON_NormalizesProfiles(t *testing.T) {
+	t.Parallel()
+
+	raw := `[
+		{
+			"name":"Finland",
+			"endpoint":"fi.example.com:443",
+			"serverPublicKey":"pub-fi",
+			"dns":"1.1.1.1",
+			"allowedIPs":"0.0.0.0/0",
+			"keepalive":30
+		},
+		{
+			"name":"Germany",
+			"endpoint":"de.example.com:443",
+			"serverPublicKey":"pub-de",
+			"dns":"8.8.8.8"
+		}
+	]`
+
+	profiles, err := wgmgr.ParseLocationProfilesJSON(raw)
+	if err != nil {
+		t.Fatalf("ParseLocationProfilesJSON returned error: %v", err)
+	}
+	if len(profiles) != 2 {
+		t.Fatalf("expected 2 profiles, got %d", len(profiles))
+	}
+	de, ok := profiles["germany"]
+	if !ok {
+		t.Fatalf("expected germany profile key")
+	}
+	if de.AllowedIPs != wgmgr.DefaultAllowedIPs {
+		t.Fatalf("expected default allowed IPs, got %q", de.AllowedIPs)
+	}
+	if de.Keepalive != 25 {
+		t.Fatalf("expected default keepalive 25, got %d", de.Keepalive)
+	}
+}
+
+func TestParseLocationProfilesJSON_RejectsEmptyName(t *testing.T) {
+	t.Parallel()
+
+	_, err := wgmgr.ParseLocationProfilesJSON(`[{"name":"  "}]`)
+	if err == nil {
+		t.Fatal("expected error for empty location name")
+	}
+}
