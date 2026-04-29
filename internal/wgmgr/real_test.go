@@ -37,7 +37,7 @@ func TestRealProvisioner_CreatePeer_IdempotentByUserLocation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first, err := r.CreatePeer("user-1", LocationFinland)
+	first, err := r.CreatePeer("user-1", "finland")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,5 +47,8 @@ func TestRealProvisioner_CreatePeer_IdempotentByUserLocation(t *testing.T) {
 	}
 	if first.PeerID != second.PeerID {
 		t.Fatalf("expected idempotent peer id, got %q and %q", first.PeerID, second.PeerID)
+	}
+	if first.Location != LocationFinland {
+		t.Fatalf("expected canonical location %q, got %q", LocationFinland, first.Location)
 	}
 }

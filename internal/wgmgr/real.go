@@ -74,6 +74,11 @@ func (r *RealProvisioner) CreatePeer(userID, location string) (*PeerMeta, error)
 	if strings.TrimSpace(location) == "" {
 		location = LocationFinland
 	}
+	profile, ok := ProfileForLocation(location)
+	if !ok {
+		return nil, ErrUnsupportedLocation
+	}
+	location = profile.Name
 	existing, err := r.findExisting(userID, location)
 	if err == nil {
 		// Peer artifacts survive restarts, but `wg set` peers are ephemeral until

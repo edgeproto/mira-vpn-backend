@@ -48,6 +48,7 @@ func (m *memoryPeersStore) Upsert(_ context.Context, userID string, location str
 type stubProvisioner struct {
 	resp wgmgrclient.CreatePeerResponse
 	err  error
+	req  wgmgrclient.CreatePeerRequest
 }
 
 type memoryGuestStore struct {
@@ -72,7 +73,8 @@ func (m *memoryGuestStore) ResolveUserID(_ context.Context, deviceID string) (st
 	return id, nil
 }
 
-func (s stubProvisioner) CreatePeer(_ context.Context, _ wgmgrclient.CreatePeerRequest) (wgmgrclient.CreatePeerResponse, error) {
+func (s *stubProvisioner) CreatePeer(_ context.Context, req wgmgrclient.CreatePeerRequest) (wgmgrclient.CreatePeerResponse, error) {
+	s.req = req
 	if s.err != nil {
 		return wgmgrclient.CreatePeerResponse{}, s.err
 	}
@@ -92,7 +94,7 @@ func TestWireGuardListLocations(t *testing.T) {
 		_ = wgmgr.LoadLocationProfilesFromEnv()
 	})
 
-	h := NewWireGuardHandler(newMemoryPeersStore(), stubProvisioner{})
+	h := NewWireGuardHandler(newMemoryPeersStore(), &stubProvisioner{})
 	req := httptest.NewRequest(http.MethodGet, "/wireguard/locations", nil)
 	rec := httptest.NewRecorder()
 
@@ -129,21 +131,22 @@ func TestWireGuardCreateConfig_ProtectedFlow(t *testing.T) {
 	}
 
 	peers := newMemoryPeersStore()
-	h := NewWireGuardHandler(peers, stubProvisioner{
+	prov := &stubProvisioner{
 		resp: wgmgrclient.CreatePeerResponse{
 			PeerID:    "abcd1234",
 			PublicKey: "wg-public-key",
 			Address:   "10.200.0.2/32",
 			Config:    "[Interface]\nPrivateKey = test\n",
 		},
-	})
+	}
+	h := NewWireGuardHandler(peers, prov)
 
 	mux := http.NewServeMux()
 	mux.Handle("/wireguard/config", auth.Middleware(tokens)(http.HandlerFunc(h.CreateConfig)))
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	reqBody := bytes.NewBufferString(`{"location":"Finland"}`)
+	reqBody := bytes.NewBufferString(`{"location":"finland"}`)
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/wireguard/config", reqBody)
 	if err != nil {
 		t.Fatal(err)
@@ -171,6 +174,9 @@ func TestWireGuardCreateConfig_ProtectedFlow(t *testing.T) {
 	if out.Location != "Finland" || out.PeerID == "" || out.Config == "" {
 		t.Fatalf("unexpected response: %+v", out)
 	}
+	if prov.req.Location != "Finland" {
+		t.Fatalf("expected canonical location Finland, got %q", prov.req.Location)
+	}
 }
 
 func TestWireGuardCreateConfig_IdempotentSecondRequest(t *testing.T) {
@@ -186,7 +192,7 @@ func TestWireGuardCreateConfig_IdempotentSecondRequest(t *testing.T) {
 	}
 
 	peers := newMemoryPeersStore()
-	h := NewWireGuardHandler(peers, stubProvisioner{
+	h := NewWireGuardHandler(peers, &stubProvisioner{
 		resp: wgmgrclient.CreatePeerResponse{
 			PeerID:    "abcd1234",
 			PublicKey: "wg-public-key",
@@ -234,7 +240,7 @@ func TestWireGuardCreateGuestConfig(t *testing.T) {
 
 	peers := newMemoryPeersStore()
 	guests := newMemoryGuestStore()
-	h := NewWireGuardHandler(peers, stubProvisioner{
+	h := NewWireGuardHandler(peers, &stubProvisioner{
 		resp: wgmgrclient.CreatePeerResponse{
 			PeerID:    "guest-peer-1",
 			PublicKey: "wg-public-key",

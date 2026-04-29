@@ -22,9 +22,12 @@ func TestMockProvisioner_CreateDeleteRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	meta, err := p.CreatePeer("user-1", "Finland")
+	meta, err := p.CreatePeer("user-1", "finland")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if meta.Location != "Finland" {
+		t.Fatalf("expected canonical location Finland, got %q", meta.Location)
 	}
 	if meta.PeerID == "" || meta.PublicKey == "" {
 		t.Fatalf("missing peer fields: %+v", meta)

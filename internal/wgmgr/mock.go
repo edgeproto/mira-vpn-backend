@@ -79,6 +79,7 @@ func (m *MockProvisioner) CreatePeer(userID, location string) (*PeerMeta, error)
 	if !ok {
 		return nil, ErrUnsupportedLocation
 	}
+	location = profile.Name
 
 	priv, err := wgtypes.GeneratePrivateKey()
 	if err != nil {
