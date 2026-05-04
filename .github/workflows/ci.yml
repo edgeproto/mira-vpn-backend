@@ -20,7 +20,7 @@ jobs:
       - name: Checkout wgmgr (go.mod replace)
         uses: actions/checkout@v4
         with:
-          repository: wesdod/mira-vpn-wgmgr
+          repository: ${{ github.repository_owner }}/mira-vpn-wgmgr
           path: mira-vpn-wgmgr
 
       - name: Setup Go
@@ -46,7 +46,7 @@ jobs:
       - name: Checkout wgmgr (go.mod replace)
         uses: actions/checkout@v4
         with:
-          repository: wesdod/mira-vpn-wgmgr
+          repository: ${{ github.repository_owner }}/mira-vpn-wgmgr
           path: mira-vpn-wgmgr
 
       - name: Set up Docker Buildx
