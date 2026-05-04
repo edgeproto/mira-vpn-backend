@@ -31,6 +31,9 @@ go.work.sum
 # Real-mode peer artifacts (bind-mounted from compose)
 var/
 
+# Local multi-location registry (copy from config/location-profiles.example.json)
+config/location-profiles.json
+
 # Editor/IDE
 # .idea/
 # .vscode/

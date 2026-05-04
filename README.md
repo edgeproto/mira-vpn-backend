@@ -1,5 +1,14 @@
 # mira-vpn-backend
 
+## VPN location servers (multi-region)
+
+Operators and developers: see **[docs/wireguard-locations.md](docs/wireguard-locations.md)** for how the location registry works (`WGMGR_LOCATION_PROFILES_FILE` / `WGMGR_LOCATION_PROFILES_JSON`), the JSON schema, API endpoints, and what each WireGuard host must provide.
+
+**Install WireGuard on a VPS from scratch:** [docs/vps-wireguard-setup.md](docs/vps-wireguard-setup.md) (keys, `wg0.conf`, NAT, `ufw`, systemd, what to put in Mira env).  
+Quick entry point in repo root: [WIREGUARD_VPS_SETUP.md](WIREGUARD_VPS_SETUP.md).
+
+**Second region / own VPS (e.g. Colorado):** [docs/second-wireguard-pop.md](docs/second-wireguard-pop.md) — NAT on the new host, why `wg show` is empty, and options (same endpoint, second `wgmgr` + API routing, or SSH sync).
+
 ## Step 9 local stack + smoke test
 
 Run this single command from `mira-vpn-backend`:

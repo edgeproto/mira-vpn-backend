@@ -6,6 +6,7 @@ EXPECTED_WG_ENDPOINT="${EXPECTED_WG_ENDPOINT:-}"
 EMAIL="${SMOKE_EMAIL:-real-smoke-$(date +%s)@example.com}"
 PASSWORD="${SMOKE_PASSWORD:-changeme123}"
 LOCATION="${SMOKE_LOCATION:-Finland}"
+SECOND_LOCATION="${SMOKE_SECOND_LOCATION:-Germany}"
 DEVICE_ID="${SMOKE_DEVICE_ID:-real-device-$(date +%s)}"
 
 if [[ -z "${EXPECTED_WG_ENDPOINT}" ]]; then
@@ -49,6 +50,29 @@ if [[ "${auth_config}" != *"Endpoint = ${EXPECTED_WG_ENDPOINT}"* ]]; then
   exit 1
 fi
 echo "auth peer provisioned: ${auth_peer_id}"
+
+echo "==> [locations] GET /wireguard/locations"
+loc_resp="$(curl -sS "${API_BASE_URL}/wireguard/locations")"
+python3 -c 'import json,sys; d=json.load(sys.stdin); locs=d.get("locations") or []; assert len(locs)>=1, locs; names={x.get("name") for x in locs}; print("locations:", ",".join(sorted(names)))' <<<"${loc_resp}"
+
+if [[ "${SECOND_LOCATION}" != "${LOCATION}" ]]; then
+  echo "==> [auth flow] second wireguard config (${SECOND_LOCATION})"
+  wg2_payload=$(cat <<EOF
+{"location":"${SECOND_LOCATION}"}
+EOF
+)
+  wg2_resp="$(curl -sS -X POST "${API_BASE_URL}/wireguard/config" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d "${wg2_payload}")"
+  auth2_config="$(printf '%s' "${wg2_resp}" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("config",""))')"
+  if [[ -z "${auth2_config}" ]]; then
+    echo "second auth wireguard config request failed: ${wg2_resp}" >&2
+    exit 1
+  fi
+  if [[ "${auth2_config}" != *"Endpoint = ${EXPECTED_WG_ENDPOINT}"* ]]; then
+    echo "second auth config endpoint mismatch, expected Endpoint = ${EXPECTED_WG_ENDPOINT}" >&2
+    exit 1
+  fi
+  echo "second location auth config ok (${SECOND_LOCATION})"
+fi
 
 echo "==> [guest flow] request wireguard config (${LOCATION})"
 guest_payload=$(cat <<EOF

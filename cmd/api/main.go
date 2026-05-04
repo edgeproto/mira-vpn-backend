@@ -13,12 +13,12 @@ import (
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/db"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/handlers"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/repositories"
-	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/wgmgr"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/wgmgrclient"
+	"github.com/wesdod/mira-vpn/mira-vpn-wgmgr/pkg/locationregistry"
 )
 
 func main() {
-	if err := wgmgr.LoadLocationProfilesFromEnv(); err != nil {
+	if err := locationregistry.LoadLocationProfilesFromEnv(); err != nil {
 		log.Fatal(err)
 	}
 

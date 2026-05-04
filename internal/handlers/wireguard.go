@@ -8,8 +8,8 @@ import (
 
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/auth"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/models"
-	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/wgmgr"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/wgmgrclient"
+	"github.com/wesdod/mira-vpn/mira-vpn-wgmgr/pkg/locationregistry"
 )
 
 type peersStore interface {
@@ -42,10 +42,6 @@ type wireguardConfigResponse struct {
 	Config    string `json:"config"`
 }
 
-type wireguardLocationResponse struct {
-	Name string `json:"name"`
-}
-
 func NewWireGuardHandler(peers peersStore, provSvc wgmgrProvisioner, guestMap ...guestDevicesStore) *WireGuardHandler {
 	var guests guestDevicesStore
 	if len(guestMap) > 0 {
@@ -60,13 +56,8 @@ func (h *WireGuardHandler) ListLocations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	profiles := wgmgr.ListLocationProfiles()
-	resp := make([]wireguardLocationResponse, 0, len(profiles))
-	for _, p := range profiles {
-		resp = append(resp, wireguardLocationResponse{Name: p.Name})
-	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"locations": resp,
+		"locations": locationregistry.ListLocationListings(),
 	})
 }
 
@@ -128,9 +119,9 @@ func (h *WireGuardHandler) CreateGuestConfig(w http.ResponseWriter, r *http.Requ
 
 func (h *WireGuardHandler) createConfigForUser(w http.ResponseWriter, r *http.Request, userID string, location string) {
 	if location == "" {
-		location = wgmgr.LocationFinland
+		location = locationregistry.DefaultLocationName()
 	}
-	profile, ok := wgmgr.ProfileForLocation(location)
+	profile, ok := locationregistry.ProfileForLocation(location)
 	if !ok {
 		http.Error(w, "unsupported location", http.StatusBadRequest)
 		return

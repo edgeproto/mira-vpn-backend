@@ -10,8 +10,9 @@ export API_HOST_PORT="${API_HOST_PORT:-18080}"
 echo "==> resetting step9 compose project (${PROJECT_NAME})"
 docker compose -p "${PROJECT_NAME}" down -v --remove-orphans >/dev/null 2>&1 || true
 
-echo "==> starting postgres + wgmgr + api (mock mode) via docker compose"
-docker compose -p "${PROJECT_NAME}" up -d --build postgres migrations wgmgr api
+echo "==> starting postgres + api via docker compose"
+echo "    (run mira-vpn-wgmgr in mock mode on the host on :9090 so the API can reach WGMGR_BASE_URL, default http://host.docker.internal:9090)"
+docker compose -p "${PROJECT_NAME}" up -d --build postgres migrations api
 
 echo "==> waiting for api health"
 for _ in $(seq 1 30); do

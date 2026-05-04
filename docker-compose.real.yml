@@ -3,25 +3,6 @@ services:
     ports:
       - "${POSTGRES_HOST_PORT:-15432}:5432"
 
-  wgmgr:
-    environment:
-      WGMGR_MODE: real
-      WGMGR_REAL_INTERFACE: ${WGMGR_REAL_INTERFACE:-wg0}
-      WGMGR_REAL_OUTPUT_DIR: ${WGMGR_REAL_OUTPUT_DIR:-/var/lib/wgmgr-real}
-      WGMGR_REAL_ENDPOINT: ${WGMGR_REAL_ENDPOINT:?set WGMGR_REAL_ENDPOINT (e.g. 95.217.206.233:51820)}
-      WGMGR_REAL_SERVER_PUBLIC_KEY: ${WGMGR_REAL_SERVER_PUBLIC_KEY:?set WGMGR_REAL_SERVER_PUBLIC_KEY}
-      WGMGR_REAL_DNS: ${WGMGR_REAL_DNS:-1.1.1.1}
-      WGMGR_REAL_ALLOWED_IPS: ${WGMGR_REAL_ALLOWED_IPS:-0.0.0.0/0}
-      WGMGR_REAL_DRY_RUN: ${WGMGR_REAL_DRY_RUN:-false}
-      WGMGR_REAL_COMMAND_TIMEOUT_SECONDS: ${WGMGR_REAL_COMMAND_TIMEOUT_SECONDS:-8}
-      WGMGR_CLIENT_MTU: ${WGMGR_CLIENT_MTU:-1280}
-    network_mode: host
-    cap_add:
-      - NET_ADMIN
-    restart: unless-stopped
-    volumes:
-      - ${WGMGR_HOST_OUTPUT_DIR:-./var/wgmgr-real}:${WGMGR_REAL_OUTPUT_DIR:-/var/lib/wgmgr-real}
-
   api:
     environment:
       PORT: ${API_HOST_PORT:-18080}
@@ -29,6 +10,10 @@ services:
       DB_PORT: ${POSTGRES_HOST_PORT:-15432}
       WGMGR_BASE_URL: http://127.0.0.1:9090
       WGMGR_TIMEOUT_SECONDS: ${WGMGR_TIMEOUT_SECONDS:-8}
+      WGMGR_LOCATION_PROFILES_FILE: ${WGMGR_LOCATION_PROFILES_FILE:-}
+      WGMGR_LOCATION_PROFILES_JSON: ${WGMGR_LOCATION_PROFILES_JSON:-}
+    volumes:
+      - ./config:/etc/mira-config:ro
     network_mode: host
     restart: unless-stopped
     depends_on:
@@ -36,5 +21,3 @@ services:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
-      wgmgr:
-        condition: service_started

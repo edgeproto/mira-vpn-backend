@@ -1,11 +1,19 @@
+# Build from parent directory (sibling mira-vpn-wgmgr for go.mod replace), e.g.:
+#   docker build -f mira-vpn-backend/Dockerfile.api -t mira-vpn-api .
+# from the directory that contains both mira-vpn-backend/ and mira-vpn-wgmgr/.
 FROM golang:1.25-alpine AS builder
 
-WORKDIR /app
+WORKDIR /src
 
-COPY go.mod go.sum ./
+COPY mira-vpn-wgmgr /src/mira-vpn-wgmgr
+WORKDIR /src/mira-vpn-wgmgr
 RUN go mod download
 
-COPY . .
+WORKDIR /src/mira-vpn-backend
+COPY mira-vpn-backend/go.mod mira-vpn-backend/go.sum ./
+RUN go mod download
+
+COPY mira-vpn-backend/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/api ./cmd/api
 
 FROM alpine:3.20

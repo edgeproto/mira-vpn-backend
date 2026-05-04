@@ -37,33 +37,17 @@ services:
       ]
     restart: "no"
 
-  wgmgr:
-    build:
-      context: .
-      dockerfile: Dockerfile.wgmgr
-    environment:
-      PORT: 9090
-      WGMGR_MODE: mock
-      WGMGR_MOCK_OUTPUT_DIR: /data/wgmgr-mock
-      WGMGR_MOCK_ENDPOINT: ${WGMGR_MOCK_ENDPOINT:-95.217.206.233:51820}
-      WGMGR_MOCK_SERVER_PUBLIC_KEY: ${WGMGR_MOCK_SERVER_PUBLIC_KEY:-BB/7/1u13mBwC2kWQyEnKcuU1z9MChg3QiJjezAmujo=}
-      WGMGR_MOCK_DNS: ${WGMGR_MOCK_DNS:-1.1.1.1}
-      WGMGR_MOCK_ALLOWED_IPS: ${WGMGR_MOCK_ALLOWED_IPS:-0.0.0.0/0}
-      WGMGR_CLIENT_MTU: ${WGMGR_CLIENT_MTU:-1280}
-    volumes:
-      - wgmgr_data:/data/wgmgr-mock
-
   api:
     build:
-      context: .
-      dockerfile: Dockerfile.api
+      context: ..
+      dockerfile: mira-vpn-backend/Dockerfile.api
     depends_on:
       postgres:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
-      wgmgr:
-        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       PORT: 8080
       DB_HOST: postgres
@@ -75,11 +59,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
       JWT_ISSUER: ${JWT_ISSUER:-mira-vpn-api}
       JWT_TTL_MINUTES: ${JWT_TTL_MINUTES:-15}
-      WGMGR_BASE_URL: http://wgmgr:9090
+      WGMGR_BASE_URL: ${WGMGR_BASE_URL:-http://host.docker.internal:9090}
       WGMGR_TIMEOUT_SECONDS: ${WGMGR_TIMEOUT_SECONDS:-5}
     ports:
       - "${API_HOST_PORT:-18080}:8080"
 
 volumes:
   postgres_data:
-  wgmgr_data:

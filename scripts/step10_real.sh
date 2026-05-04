@@ -10,22 +10,41 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
-echo "==> loading ${ENV_FILE}"
-set -a
-# shellcheck disable=SC1090
-source "${ENV_FILE}"
-set +a
+echo "==> reading ${ENV_FILE} (compose loads full file; shell only needs a few keys for preflight)"
 
-if [[ -z "${WGMGR_REAL_ENDPOINT:-}" ]]; then
+# Do not `source` the whole env file: multi-line JSON or special characters in
+# WGMGR_LOCATION_PROFILES_* would break bash.
+read_env_line() {
+  local key="$1"
+  local line
+  line="$(grep -E "^${key}=" "${ENV_FILE}" 2>/dev/null | head -n1 || true)"
+  line="${line#${key}=}"
+  line="${line%$'\r'}"
+  if [[ "${line}" == \"*\" ]]; then
+    line="${line#\"}"
+    line="${line%\"}"
+  elif [[ "${line}" == \'*\' ]]; then
+    line="${line#\'}"
+    line="${line%\'}"
+  fi
+  printf '%s' "${line}"
+}
+
+WGMGR_REAL_ENDPOINT="$(read_env_line WGMGR_REAL_ENDPOINT)"
+WGMGR_REAL_SERVER_PUBLIC_KEY="$(read_env_line WGMGR_REAL_SERVER_PUBLIC_KEY)"
+export WGMGR_REAL_ENDPOINT WGMGR_REAL_SERVER_PUBLIC_KEY
+
+if [[ -z "${WGMGR_REAL_ENDPOINT}" ]]; then
   echo "WGMGR_REAL_ENDPOINT must be set in ${ENV_FILE}" >&2
   exit 1
 fi
-if [[ -z "${WGMGR_REAL_SERVER_PUBLIC_KEY:-}" ]]; then
+if [[ -z "${WGMGR_REAL_SERVER_PUBLIC_KEY}" ]]; then
   echo "WGMGR_REAL_SERVER_PUBLIC_KEY must be set in ${ENV_FILE}" >&2
   exit 1
 fi
 
-WG_INTERFACE="${WGMGR_REAL_INTERFACE:-wg0}"
+WG_INTERFACE="$(read_env_line WGMGR_REAL_INTERFACE)"
+WG_INTERFACE="${WG_INTERFACE:-wg0}"
 if ! command -v wg >/dev/null 2>&1; then
   echo "wg binary not found on host; install wireguard-tools before running real mode." >&2
   exit 1
@@ -55,8 +74,8 @@ export POSTGRES_HOST_PORT="${POSTGRES_HOST_PORT:-15432}"
 echo "==> resetting compose project (${PROJECT_NAME})"
 docker compose -p "${PROJECT_NAME}" -f docker-compose.yml -f docker-compose.real.yml --env-file "${ENV_FILE}" down -v --remove-orphans >/dev/null 2>&1 || true
 
-echo "==> starting real stack"
-docker compose -p "${PROJECT_NAME}" -f docker-compose.yml -f docker-compose.real.yml --env-file "${ENV_FILE}" up -d --build postgres migrations wgmgr api
+echo "==> starting real stack (postgres + api; wgmgr must already be listening on 127.0.0.1:9090, e.g. from mira-vpn-wgmgr)"
+docker compose -p "${PROJECT_NAME}" -f docker-compose.yml -f docker-compose.real.yml --env-file "${ENV_FILE}" up -d --build postgres migrations api
 
 echo "==> waiting for api health"
 for _ in $(seq 1 45); do
