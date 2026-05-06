@@ -46,8 +46,8 @@ services:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./config:/etc/mira-config:ro
     environment:
       PORT: 8080
       DB_HOST: postgres
@@ -59,8 +59,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
       JWT_ISSUER: ${JWT_ISSUER:-mira-vpn-api}
       JWT_TTL_MINUTES: ${JWT_TTL_MINUTES:-15}
-      WGMGR_BASE_URL: ${WGMGR_BASE_URL:-http://host.docker.internal:9090}
       WGMGR_TIMEOUT_SECONDS: ${WGMGR_TIMEOUT_SECONDS:-5}
+      WGMGR_LOCATION_PROFILES_FILE: ${WGMGR_LOCATION_PROFILES_FILE:-/etc/mira-config/location-profiles.json}
+      WGMGR_ADMIN_TOKEN_DEFAULT: ${WGMGR_ADMIN_TOKEN_DEFAULT:-}
+      WGMGR_ADMIN_TOKEN_FINLAND: ${WGMGR_ADMIN_TOKEN_FINLAND:-}
+      WGMGR_ADMIN_TOKEN_USA_COLORADO: ${WGMGR_ADMIN_TOKEN_USA_COLORADO:-}
     ports:
       - "${API_HOST_PORT:-18080}:8080"
 
