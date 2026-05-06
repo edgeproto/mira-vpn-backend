@@ -67,7 +67,7 @@ Array of objects. **Required** for every object loaded from JSON or file:
 [
   {
     "name": "Finland",
-    "endpoint": "fi.vpn.example.com:443",
+    "endpoint": "fi.vpn.example.com:51820",
     "serverPublicKey": "BASE64_SERVER_PUBLIC_KEY_FI",
     "dns": "1.1.1.1",
     "displayName": "Helsinki",
@@ -75,7 +75,7 @@ Array of objects. **Required** for every object loaded from JSON or file:
   },
   {
     "name": "Germany",
-    "endpoint": "de.vpn.example.com:443",
+    "endpoint": "de.vpn.example.com:51820",
     "serverPublicKey": "BASE64_SERVER_PUBLIC_KEY_DE",
     "dns": "1.1.1.1",
     "displayName": "Frankfurt",
@@ -120,13 +120,13 @@ wg set wg0 peer <client_public_key> allowed-ips <client_tunnel_ip>/32
 
 only on **that** machine’s **`wg0`**.
 
-- For a location whose **`endpoint`** is that same host (e.g. Finland → `95.217.206.233:443`), the peer is created where the tunnel actually terminates, and **NAT / forwarding** you configured on that host apply. **Internet works** if that host’s `wg0.conf` `PostUp` rules are correct.
+- For a location whose **`endpoint`** is that same host (e.g. Finland → `95.217.206.233:51820`), the peer is created where the tunnel actually terminates, and **NAT / forwarding** you configured on that host apply. **Internet works** if that host’s `wg0.conf` `PostUp` rules are correct.
 
-- For a location whose **`endpoint`** is **another** IP (e.g. USA-Colorado → `5.180.24.40:443`), the **client profile** tells the phone to talk to **that** server. The peer created by Mira’s `wgmgr` is still only on the **Finland** box unless you **also** provision that peer on the USA box (second `wgmgr`, automation, or manual `wg set`). If the USA server **does** accept the handshake but has **no MASQUERADE / `ip_forward` / FORWARD** rules for the client subnet, you get the classic symptom: **VPN “connected” but no internet**.
+- For a location whose **`endpoint`** is **another** IP (e.g. USA-Colorado → `5.180.24.40:51820`), the **client profile** tells the phone to talk to **that** server. The peer created by Mira’s `wgmgr` is still only on the **Finland** box unless you **also** provision that peer on the USA box (second `wgmgr`, automation, or manual `wg set`). If the USA server **does** accept the handshake but has **no MASQUERADE / `ip_forward` / FORWARD** rules for the client subnet, you get the classic symptom: **VPN “connected” but no internet**.
 
 **Practical options:**
 
-1. **Separate VPS per region** — On **each** VPS: full WireGuard + NAT per [vps-wireguard-setup.md](./vps-wireguard-setup.md), and a **provisioning path** that adds each new peer on **that** host’s `wg` (today that means **one `wgmgr` (or equivalent) per server**, or your own sync from Finland).
+1. **Separate VPS per region** — On **each** VPS: follow the canonical runbook at `mira-vpn-wgmgr/docs/vps-deploy.md`, and ensure there is a **provisioning path** that adds each new peer on **that** host’s `wg` (today that means **one `wgmgr` (or equivalent) per server**, or your own sync from Finland).
 2. **Single VPS, multiple UI locations** — Point every row at the **same** `endpoint` and `serverPublicKey` with different `name` / `displayName` until you have a second host fully wired.
 3. **Hybrid** — Keep Finland on this stack; for USA, either replicate `wgmgr`+API there or temporarily set USA’s `endpoint` back to Finland’s until USA is ready.
 
@@ -137,7 +137,7 @@ only on **that** machine’s **`wg0`**.
 | Situation | What to check |
 |-----------|----------------|
 | Second location uses a **different `endpoint` IP** | On **that** server: `sudo wg show` — is the client **peer** present after you connect from the app? If not, traffic never lands correctly; fix provisioning on that host. |
-| Peer **is** on the second server | Same checklist as Finland: **`net.ipv4.ip_forward=1`**, **`POSTROUTING` MASQUERADE** for your tunnel subnet (e.g. `10.200.0.0/24`) out the **WAN** interface, **FORWARD** allow `wg0`, **UDP** port open in cloud + OS firewall. See [vps-wireguard-setup.md](./vps-wireguard-setup.md) §3–§5. |
+| Peer **is** on the second server | Same checklist as Finland: **`net.ipv4.ip_forward=1`**, **`POSTROUTING` MASQUERADE** for your tunnel subnet (e.g. `10.200.0.0/24`) out the **WAN** interface, **FORWARD** allow `wg0`, **UDP** port open in cloud + OS firewall. See `mira-vpn-wgmgr/docs/vps-deploy.md`. |
 | Finland OK, USA different IP | Almost always **NAT/routing on the USA VPS** or **peer not applied on USA** — not an Android app bug. |
 
 ---
@@ -158,8 +158,8 @@ The app calls `GET /wireguard/locations`, lets the user pick a server, persists 
 
 ## Related files
 
-- **Second POP (e.g. Colorado):** [second-wireguard-pop.md](./second-wireguard-pop.md) — WireGuard on the new VPS, and how peers get there (same endpoint vs second `wgmgr` vs SSH sync).
-- **Fresh VPS WireGuard install (keys, wg0, NAT, firewall):** [vps-wireguard-setup.md](./vps-wireguard-setup.md)
+- **Per-VPS runbook (canonical):** `mira-vpn-wgmgr/docs/vps-deploy.md`
+- **Legacy pointer in backend repo:** [vps-wireguard-setup.md](./vps-wireguard-setup.md)
 - Registry load / validation: `internal/wgmgr/template.go`
 - HTTP handlers: `internal/handlers/wireguard.go`
 - API startup: `cmd/api/main.go` (`LoadLocationProfilesFromEnv`)

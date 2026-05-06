@@ -1,6 +1,6 @@
 # Multi-location WireGuard registry (optional)
 
-**New VPS?** Install WireGuard on the host first: **[docs/vps-wireguard-setup.md](../docs/vps-wireguard-setup.md)**.
+**New VPS?** Use the canonical runbook: `mira-vpn-wgmgr/docs/vps-deploy.md`.
 
 When `WGMGR_LOCATION_PROFILES_FILE` is set (see `.env.real.example`), the API and
 `wgmgr` load location rows from a JSON **file** mounted at `/etc/mira-config/` in

@@ -83,8 +83,8 @@ func (s *stubProvisioner) CreatePeer(_ context.Context, req wgmgrclient.CreatePe
 
 func TestWireGuardListLocations(t *testing.T) {
 	t.Setenv("WGMGR_LOCATION_PROFILES_JSON", `[
-		{"name":"Germany","endpoint":"de.example.com:443","serverPublicKey":"de-pub"},
-		{"name":"Finland","endpoint":"fi.example.com:443","serverPublicKey":"fi-pub"}
+		{"name":"Germany","endpoint":"de.example.com:51820","serverPublicKey":"de-pub"},
+		{"name":"Finland","endpoint":"fi.example.com:51820","serverPublicKey":"fi-pub"}
 	]`)
 	if err := locationregistry.LoadLocationProfilesFromEnv(); err != nil {
 		t.Fatalf("load location profiles: %v", err)

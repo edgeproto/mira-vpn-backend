@@ -1,7 +1,7 @@
 [
   {
     "name": "Finland",
-    "endpoint": "YOUR_PUBLIC_HOST:443",
+    "endpoint": "YOUR_PUBLIC_HOST:51820",
     "serverPublicKey": "YOUR_WG_SERVER_PUBLIC_KEY_BASE64",
     "dns": "1.1.1.1",
     "displayName": "Finland",
@@ -9,7 +9,7 @@
   },
   {
     "name": "Germany",
-    "endpoint": "YOUR_SECOND_HOST_OR_SAME_AS_FINLAND:443",
+    "endpoint": "YOUR_SECOND_HOST_OR_SAME_AS_FINLAND:51820",
     "serverPublicKey": "YOUR_SECOND_SERVER_PUBLIC_KEY_OR_SAME_AS_FINLAND",
     "dns": "1.1.1.1",
     "displayName": "Germany",
