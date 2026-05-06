@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/auth"
 	"github.com/wesdod/mira-vpn/mira-vpn-backend/internal/db"
@@ -53,12 +54,30 @@ func main() {
 	billingRepo := repositories.NewBillingRepository(dbConn)
 	guestDevicesRepo := repositories.NewGuestDevicesRepository(dbConn)
 	authHandler := handlers.NewAuthHandler(usersRepo, tokenManager, verifier)
-	wgmgrClient := wgmgrclient.New(
+	wgmgrTimeout := time.Duration(getEnvInt("WGMGR_TIMEOUT_SECONDS", 5)) * time.Second
+	defaultWgmgrClient := wgmgrclient.New(
 		getEnv("WGMGR_BASE_URL", "http://127.0.0.1:9090"),
 		getEnv("WGMGR_ADMIN_TOKEN_DEFAULT", ""),
-		time.Duration(getEnvInt("WGMGR_TIMEOUT_SECONDS", 5))*time.Second,
+		wgmgrTimeout,
 	)
-	wireGuardHandler := handlers.NewWireGuardHandler(peersRepo, wgmgrClient, guestDevicesRepo)
+	wgmgrClientsByLocation := make(map[string]*wgmgrclient.Client, len(locationregistry.ListLocationProfiles()))
+	for _, profile := range locationregistry.ListLocationProfiles() {
+		baseURL := firstNonEmpty(profile.WgmgrBaseURL, os.Getenv("WGMGR_BASE_URL"))
+		token := firstNonEmpty(
+			os.Getenv("WGMGR_ADMIN_TOKEN_"+envSuffix(profile.Name)),
+			os.Getenv("WGMGR_ADMIN_TOKEN_DEFAULT"),
+		)
+		if baseURL == "" {
+			continue
+		}
+		wgmgrClientsByLocation[normalizeLocationKey(profile.Name)] = wgmgrclient.New(baseURL, token, wgmgrTimeout)
+	}
+	wireGuardHandler := handlers.NewWireGuardHandlerWithLocationClients(
+		peersRepo,
+		defaultWgmgrClient,
+		wgmgrClientsByLocation,
+		guestDevicesRepo,
+	)
 	billingHandler := handlers.NewBillingHandler(billingRepo)
 
 	mux := http.NewServeMux()
@@ -119,4 +138,28 @@ func splitEnvCSV(key string) []string {
 		values = append(values, trimmed)
 	}
 	return values
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func normalizeLocationKey(location string) string {
+	return strings.ToLower(strings.TrimSpace(location))
+}
+
+func envSuffix(location string) string {
+	key := normalizeLocationKey(location)
+	key = strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return unicode.ToUpper(r)
+		}
+		return '_'
+	}, key)
+	return strings.Trim(key, "_")
 }

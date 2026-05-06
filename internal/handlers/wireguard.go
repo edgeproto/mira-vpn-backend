@@ -25,9 +25,10 @@ type guestDevicesStore interface {
 }
 
 type WireGuardHandler struct {
-	peers    peersStore
-	provSvc  wgmgrProvisioner
-	guestMap guestDevicesStore
+	peers             peersStore
+	provSvc           wgmgrProvisioner
+	provSvcByLocation map[string]wgmgrProvisioner
+	guestMap          guestDevicesStore
 }
 
 type wireguardConfigRequest struct {
@@ -48,6 +49,31 @@ func NewWireGuardHandler(peers peersStore, provSvc wgmgrProvisioner, guestMap ..
 		guests = guestMap[0]
 	}
 	return &WireGuardHandler{peers: peers, provSvc: provSvc, guestMap: guests}
+}
+
+func NewWireGuardHandlerWithLocationClients(
+	peers peersStore,
+	defaultProvSvc wgmgrProvisioner,
+	clientsByLocation map[string]*wgmgrclient.Client,
+	guestMap ...guestDevicesStore,
+) *WireGuardHandler {
+	var guests guestDevicesStore
+	if len(guestMap) > 0 {
+		guests = guestMap[0]
+	}
+	locationClients := make(map[string]wgmgrProvisioner, len(clientsByLocation))
+	for location, client := range clientsByLocation {
+		if client == nil {
+			continue
+		}
+		locationClients[normalizeLocationKey(location)] = client
+	}
+	return &WireGuardHandler{
+		peers:             peers,
+		provSvc:           defaultProvSvc,
+		provSvcByLocation: locationClients,
+		guestMap:          guests,
+	}
 }
 
 func (h *WireGuardHandler) ListLocations(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +154,12 @@ func (h *WireGuardHandler) createConfigForUser(w http.ResponseWriter, r *http.Re
 	}
 	location = profile.Name
 
-	mgmtResp, err := h.provSvc.CreatePeer(r.Context(), wgmgrclient.CreatePeerRequest{
+	provSvc, ok := h.provisionerForLocation(location)
+	if !ok {
+		http.Error(w, "failed to provision peer", http.StatusBadGateway)
+		return
+	}
+	mgmtResp, err := provSvc.CreatePeer(r.Context(), wgmgrclient.CreatePeerRequest{
 		UserID:   userID,
 		Location: location,
 	})
@@ -159,4 +190,19 @@ func decodeWireGuardConfigRequest(w http.ResponseWriter, r *http.Request) (wireg
 	}
 	req.Location = strings.TrimSpace(req.Location)
 	return req, true
+}
+
+func (h *WireGuardHandler) provisionerForLocation(location string) (wgmgrProvisioner, bool) {
+	if len(h.provSvcByLocation) > 0 {
+		provSvc, ok := h.provSvcByLocation[normalizeLocationKey(location)]
+		return provSvc, ok
+	}
+	if h.provSvc == nil {
+		return nil, false
+	}
+	return h.provSvc, true
+}
+
+func normalizeLocationKey(location string) string {
+	return strings.ToLower(strings.TrimSpace(location))
 }
