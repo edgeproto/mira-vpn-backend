@@ -55,6 +55,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(usersRepo, tokenManager, verifier)
 	wgmgrClient := wgmgrclient.New(
 		getEnv("WGMGR_BASE_URL", "http://127.0.0.1:9090"),
+		getEnv("WGMGR_ADMIN_TOKEN_DEFAULT", ""),
 		time.Duration(getEnvInt("WGMGR_TIMEOUT_SECONDS", 5))*time.Second,
 	)
 	wireGuardHandler := handlers.NewWireGuardHandler(peersRepo, wgmgrClient, guestDevicesRepo)
