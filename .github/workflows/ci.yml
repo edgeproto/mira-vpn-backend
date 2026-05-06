@@ -17,11 +17,12 @@ jobs:
         with:
           path: mira-vpn-backend
 
-      # Canonical wgmgr repo (not necessarily same GitHub org as this fork).
+      # Checkout sibling wgmgr repo under the same owner as backend.
       - name: Checkout wgmgr (go.mod replace)
         uses: actions/checkout@v4
         with:
-          repository: edgeproto/mira-vpn-wgmgr
+          repository: ${{ github.repository_owner }}/mira-vpn-wgmgr
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: mira-vpn-wgmgr
 
       - name: Setup Go
@@ -47,7 +48,8 @@ jobs:
       - name: Checkout wgmgr (go.mod replace)
         uses: actions/checkout@v4
         with:
-          repository: edgeproto/mira-vpn-wgmgr
+          repository: ${{ github.repository_owner }}/mira-vpn-wgmgr
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: mira-vpn-wgmgr
 
       - name: Set up Docker Buildx
