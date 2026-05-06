@@ -17,6 +17,8 @@ Run this single command from `mira-vpn-backend`:
 ./scripts/step9.sh
 ```
 
+
+
 It will:
 - start `postgres`, `migrations`, `wgmgr` (mock mode), and `api` via Docker Compose
 - wait for API health
