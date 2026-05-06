@@ -21,8 +21,8 @@ jobs:
       - name: Checkout wgmgr (go.mod replace)
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/mira-vpn-wgmgr
-          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: edgeproto/mira-vpn-wgmgr
+          token: ${{ secrets.PAT_TOKEN }}
           path: mira-vpn-wgmgr
 
       - name: Setup Go
@@ -48,8 +48,8 @@ jobs:
       - name: Checkout wgmgr (go.mod replace)
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/mira-vpn-wgmgr
-          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: edgeproto/mira-vpn-wgmgr
+          ${{ secrets.PAT_TOKEN }}
           path: mira-vpn-wgmgr
 
       - name: Set up Docker Buildx
