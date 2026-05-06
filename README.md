@@ -41,9 +41,11 @@ docker compose -p mira_vpn_step9 down -v
 - `API_HOST_PORT` (default: `18080`)
 - `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`
 
-## Step 10 real WireGuard mode (dedicated server)
+## Step 10 real WireGuard mode (remote POPs)
 
-This keeps Step 9 mock mode unchanged and adds an override for real mode.
+Step 10 now runs the backend stack only (`postgres` + `api`) and validates
+reachability + provisioning against remote `mira-vpn-wgmgr` POPs listed in
+`config/location-profiles.json`.
 
 1) Create a real env file from template:
 
@@ -52,25 +54,54 @@ cp .env.real.example .env.real
 ```
 
 2) Edit `.env.real` and set at least:
-- `WGMGR_REAL_ENDPOINT` (example: `95.217.206.233:51820`)
-- `WGMGR_REAL_SERVER_PUBLIC_KEY` (from `/etc/wireguard/server_public.key` on your VPN host)
 - `JWT_SECRET` (strong random value)
+- `WGMGR_LOCATION_PROFILES_FILE` (default is `/etc/mira-config/location-profiles.json`)
+- `WGMGR_ADMIN_TOKEN_DEFAULT` and/or `WGMGR_ADMIN_TOKEN_<LOCATION>`
 
-3) Run the real stack + smoke validation:
+3) Ensure each POP in `config/location-profiles.json` has:
+- `endpoint` set to `<public-ip-or-hostname>:51820`
+- `serverPublicKey` set to that POP's WireGuard server public key
+- `wgmgrBaseUrl` set to `http://<pop-ip-or-hostname>:9090`
+
+4) Run real stack + multi-location smoke validation:
 
 ```bash
 ./scripts/step10_real.sh
 ```
 
 It will:
-- start `postgres`, `migrations`, `wgmgr` (real mode), and `api` using:
+- check authenticated `GET /health` on every configured `wgmgrBaseUrl`
+- start `postgres`, `migrations`, and `api` using:
   - `docker-compose.yml`
   - `docker-compose.real.yml`
-- run auth + guest provisioning smoke checks
-- assert returned WireGuard configs contain `Endpoint = $WGMGR_REAL_ENDPOINT`
+- run auth + config provisioning smoke checks for every location
 
 Stop and clean real stack:
 
 ```bash
 docker compose -p mira_vpn_real -f docker-compose.yml -f docker-compose.real.yml --env-file .env.real down -v
 ```
+
+## Phased rollout checklist
+
+1) **Refactor + test locally**
+- Run `go test ./...` in `mira-vpn-backend` and `mira-vpn-wgmgr`
+- Run `./scripts/step9.sh` for mock end-to-end validation
+
+2) **Backend redeploy (dedicated server)**
+- Deploy backend stack without local `wgmgr`
+- Mount `./config` and set `WGMGR_LOCATION_PROFILES_FILE`
+- Set `WGMGR_ADMIN_TOKEN_DEFAULT` or per-location token env vars
+
+3) **Mock POP smoke**
+- Point one location at a mock `mira-vpn-wgmgr` instance
+- Run `./scripts/step10_real.sh` and confirm all location checks pass
+
+4) **First real VPS**
+- Follow `mira-vpn-wgmgr/docs/vps-deploy.md` on the first POP
+- Update `config/location-profiles.json` + matching token env var
+- Re-run `./scripts/step10_real.sh`
+
+5) **Remaining VPSes**
+- Repeat VPS onboarding per location
+- Verify each addition by running `./scripts/step10_real.sh`

@@ -33,6 +33,8 @@ locations="$(
 import json
 import sys
 payload = json.load(sys.stdin)
+if isinstance(payload, dict):
+    payload = payload.get("locations", [])
 if not isinstance(payload, list):
     raise SystemExit(1)
 names = [item.get("name", "") for item in payload if isinstance(item, dict)]
