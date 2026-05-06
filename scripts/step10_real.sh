@@ -30,40 +30,59 @@ read_env_line() {
   printf '%s' "${line}"
 }
 
-WGMGR_REAL_ENDPOINT="$(read_env_line WGMGR_REAL_ENDPOINT)"
-WGMGR_REAL_SERVER_PUBLIC_KEY="$(read_env_line WGMGR_REAL_SERVER_PUBLIC_KEY)"
-export WGMGR_REAL_ENDPOINT WGMGR_REAL_SERVER_PUBLIC_KEY
-
-if [[ -z "${WGMGR_REAL_ENDPOINT}" ]]; then
-  echo "WGMGR_REAL_ENDPOINT must be set in ${ENV_FILE}" >&2
-  exit 1
+PROFILES_FILE="$(read_env_line WGMGR_LOCATION_PROFILES_FILE)"
+PROFILES_FILE="${PROFILES_FILE:-config/location-profiles.json}"
+if [[ "${PROFILES_FILE}" == /etc/mira-config/* ]]; then
+  PROFILES_FILE="./config/${PROFILES_FILE##*/}"
 fi
-if [[ -z "${WGMGR_REAL_SERVER_PUBLIC_KEY}" ]]; then
-  echo "WGMGR_REAL_SERVER_PUBLIC_KEY must be set in ${ENV_FILE}" >&2
+if [[ ! -f "${PROFILES_FILE}" ]]; then
+  echo "location profiles file not found: ${PROFILES_FILE}" >&2
   exit 1
 fi
 
-WG_INTERFACE="$(read_env_line WGMGR_REAL_INTERFACE)"
-WG_INTERFACE="${WG_INTERFACE:-wg0}"
-if ! command -v wg >/dev/null 2>&1; then
-  echo "wg binary not found on host; install wireguard-tools before running real mode." >&2
+WGMGR_ADMIN_TOKEN_DEFAULT="$(read_env_line WGMGR_ADMIN_TOKEN_DEFAULT)"
+
+echo "==> checking per-POP wgmgr health from ${PROFILES_FILE}"
+profiles="$(
+  python3 - "${PROFILES_FILE}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+if not isinstance(data, list) or not data:
+    raise SystemExit("location profiles must be a non-empty list")
+
+for item in data:
+    if not isinstance(item, dict):
+        continue
+    name = (item.get("name") or "").strip()
+    base = (item.get("wgmgrBaseUrl") or "").strip()
+    if name and base:
+        print(f"{name}\t{base}")
+PY
+)"
+if [[ -z "${profiles}" ]]; then
+  echo "no profiles with wgmgrBaseUrl found in ${PROFILES_FILE}" >&2
   exit 1
 fi
 
-echo "==> validating server public key against host interface (${WG_INTERFACE})"
-HOST_SERVER_PUBLIC_KEY="$(wg show "${WG_INTERFACE}" public-key 2>/dev/null || true)"
-if [[ -z "${HOST_SERVER_PUBLIC_KEY}" ]]; then
-  echo "failed to read public key for interface ${WG_INTERFACE}. Ensure interface exists and is up." >&2
-  exit 1
-fi
-if [[ "${HOST_SERVER_PUBLIC_KEY}" != "${WGMGR_REAL_SERVER_PUBLIC_KEY}" ]]; then
-  echo "server public key mismatch for ${WG_INTERFACE}" >&2
-  echo "host key: ${HOST_SERVER_PUBLIC_KEY}" >&2
-  echo "env  key: ${WGMGR_REAL_SERVER_PUBLIC_KEY}" >&2
-  echo "update WGMGR_REAL_SERVER_PUBLIC_KEY in ${ENV_FILE} to match host key, then retry." >&2
-  exit 1
-fi
-echo "server public key matches host interface"
+while IFS=$'\t' read -r profile_name wgmgr_base_url; do
+  [[ -z "${profile_name}" || -z "${wgmgr_base_url}" ]] && continue
+  token_var_suffix="$(printf '%s' "${profile_name}" | tr '[:lower:]' '[:upper:]' | sed -E 's/[^A-Z0-9]+/_/g')"
+  token_var="WGMGR_ADMIN_TOKEN_${token_var_suffix}"
+  token_override="$(read_env_line "${token_var}")"
+  token="${token_override:-${WGMGR_ADMIN_TOKEN_DEFAULT}}"
+  auth_headers=()
+  if [[ -n "${token}" ]]; then
+    auth_headers=(-H "Authorization: Bearer ${token}")
+  fi
+
+  echo "   - ${profile_name}: ${wgmgr_base_url}/health"
+  curl -fsS "${wgmgr_base_url}/health" "${auth_headers[@]}" >/dev/null
+done <<< "${profiles}"
+echo "all configured POP health checks passed"
 
 export API_HOST_PORT
 export POSTGRES_USER="${POSTGRES_USER:-postgres}"
@@ -87,9 +106,8 @@ done
 curl -fsS "http://127.0.0.1:${API_HOST_PORT}/health" >/dev/null
 echo "api is healthy"
 
-echo "==> running real-mode smoke flow (auth + guest)"
-API_BASE_URL="http://127.0.0.1:${API_HOST_PORT}" EXPECTED_WG_ENDPOINT="${WGMGR_REAL_ENDPOINT}" ./scripts/smoke_real.sh
+echo "==> running multi-location smoke flow (auth + config per location)"
+API_BASE_URL="http://127.0.0.1:${API_HOST_PORT}" ./scripts/smoke.sh
 
 echo "==> done"
-echo "To inspect peers on host: sudo wg show ${WGMGR_REAL_INTERFACE:-wg0}"
 echo "To stop stack: docker compose -p ${PROJECT_NAME} -f docker-compose.yml -f docker-compose.real.yml --env-file ${ENV_FILE} down -v"
